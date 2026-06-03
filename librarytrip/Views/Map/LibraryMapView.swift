@@ -19,6 +19,8 @@ struct LibraryMapView: View {
     @State private var suggestions: [Library] = []
     @State private var isGeocoding = false
     @State private var geocodeError: String?
+    @State private var showResultsPanel = false
+    @State private var searchLabel = ""   // 検索ラベル（例: "杉並区"）
 
     // フィルタ
     @State private var filterStudy = false
@@ -91,10 +93,12 @@ struct LibraryMapView: View {
             }
         }
         .ignoresSafeArea()
-        // 地図タップでサジェストを閉じる
+        // 地図タップでサジェスト・結果パネルを閉じる
         .onTapGesture {
             if isSearchFocused {
                 isSearchFocused = false
+            } else if showResultsPanel {
+                withAnimation { showResultsPanel = false }
             } else {
                 selectedLibrary = nil
             }
@@ -137,6 +141,12 @@ struct LibraryMapView: View {
                     appState.apiError = nil
                 }
                 .padding(.bottom, 4)
+            }
+
+            // 検索結果リストパネル
+            if showResultsPanel && !isSearchFocused && selectedLibrary == nil {
+                searchResultsPanel
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             // 選択中図書館カード
@@ -483,12 +493,7 @@ struct LibraryMapView: View {
         }
     }
 
-    /// テキスト送信 → ジオコーディング → 地図移動 → Calil API 取得
-    ///
-    /// 優先順位:
-    ///   1. pref + city が判明 → `fetchLibraries(pref:city:)` でそのエリア全館取得
-    ///   2. pref のみ判明      → `fetchLibraries(pref:)` で都道府県全館取得
-    ///   3. それ以外           → geocode で近隣検索
+    /// テキスト送信 → CLGeocoder → 地図移動 → Calil API 取得 → 結果パネル表示
     private func search() async {
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return }
@@ -497,12 +502,16 @@ struct LibraryMapView: View {
         suggestions = []
         isGeocoding = true
         geocodeError = nil
+        showResultsPanel = false
 
+        guard let request = MKGeocodingRequest(addressString: query + " 日本") else {
+            geocodeError = "「\(query)」の場所が見つかりませんでした"
+            isGeocoding = false
+            return
+        }
         do {
-            guard let request = MKGeocodingRequest(addressString: query + " 日本") else {
-                throw SearchError.notFound
-            }
-            let mapItems = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[MKMapItem], any Error>) in
+            // "日本" を付けることで国内ヒット率を上げる
+            let mapItems: [MKMapItem] = try await withCheckedThrowingContinuation { continuation in
                 request.getMapItems { items, error in
                     if let error { continuation.resume(throwing: error) }
                     else { continuation.resume(returning: items ?? []) }
@@ -512,27 +521,36 @@ struct LibraryMapView: View {
                 throw SearchError.notFound
             }
 
-            let coordinate = mapItem.location.coordinate
-            let (pref, city, span) = calilParams(from: mapItem, query: query)
+            let placemark               = mapItem.placemark
+            let coordinate              = placemark.coordinate
+            let (pref, city, span)      = calilParams(from: placemark, query: query)
 
-            withAnimation {
+            withAnimation(.easeInOut(duration: 0.5)) {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: coordinate,
                     span: span
                 ))
             }
-            lastFetchedCenter = coordinate
+            lastFetchedCenter  = coordinate
             showSearchHereButton = false
 
             if let pref {
-                // 市区町村 or 都道府県が特定できた → Calil の pref+city API で確実に全館取得
                 await appState.fetchLibraries(pref: pref, city: city)
             } else {
-                // 施設名・住所など → geocode で近隣検索
                 await appState.fetchNearbyLibraries(
                     latitude: coordinate.latitude,
                     longitude: coordinate.longitude
                 )
+            }
+
+            // 結果パネルを表示
+            if !appState.lastSearchResults.isEmpty {
+                searchLabel = query
+                withAnimation(.spring(response: 0.4)) {
+                    showResultsPanel = true
+                }
+            } else {
+                geocodeError = "「\(query)」周辺に図書館が見つかりませんでした"
             }
         } catch {
             geocodeError = "「\(query)」の場所が見つかりませんでした"
@@ -540,69 +558,30 @@ struct LibraryMapView: View {
         isGeocoding = false
     }
 
-    /// MKMapItem の fullAddress から (pref, city?, mapSpan) を解決する
+    /// CLPlacemark + クエリから (pref, city?, mapSpan) を解決する
     ///
-    /// fullAddress ("〒XXX 東京都渋谷区..." など) の先頭から
-    /// 都/道/府/県 で終わる都道府県と、その直後の 市/区/町/村/郡 で終わる市区町村を抽出する。
-    /// クエリ自体が 市/区/町/村/郡 で終わる場合はそのまま city として優先使用する。
+    /// - `administrativeArea` → 都道府県 ("東京都" など)
+    /// - `locality`           → 市区 ("杉並区" など)
+    /// - クエリが 市/区/町/村/郡 で終わる場合はそれを city として優先使用
     private func calilParams(
-        from mapItem: MKMapItem,
+        from placemark: CLPlacemark,
         query: String
     ) -> (pref: String?, city: String?, span: MKCoordinateSpan) {
 
-        // 郵便番号プレフィックス ("〒XXX-XXXX ") を除いた住所部分
-        let raw = mapItem.address?.fullAddress ?? ""
-        let address: String
-        if let spaceIdx = raw.firstIndex(of: " ") {
-            address = String(raw[raw.index(after: spaceIdx)...])
-        } else {
-            address = raw
-        }
+        let pref = placemark.administrativeArea   // 例: "東京都"
 
-        // 都道府県: 先頭 2〜5 文字で 都/道/府/県 で終わる部分を検出
-        let prefSuffixes: Set<Character> = ["都", "道", "府", "県"]
-        var pref: String?
-        for len in 2...5 {
-            guard len <= address.count else { break }
-            let candidate = String(address.prefix(len))
-            if let last = candidate.last, prefSuffixes.contains(last) {
-                pref = candidate
-                break
-            }
-        }
-
-        // クエリが市区町村パターンなら自身を city として優先使用
         let isCityQuery = ["市", "区", "町", "村", "郡"].contains { query.hasSuffix($0) }
-        var city: String?
-        if isCityQuery {
-            city = query
-        } else if let p = pref {
-            let afterPref = String(address.dropFirst(p.count))
-            let citySuffixes: Set<Character> = ["市", "区", "町", "村", "郡"]
-            for len in 1...8 {
-                guard len <= afterPref.count else { break }
-                let candidate = String(afterPref.prefix(len))
-                if let last = candidate.last, citySuffixes.contains(last) {
-                    city = candidate
-                    break
-                }
-            }
-        }
+        let city: String? = isCityQuery ? query : placemark.locality
 
-        // ズームレベルをエリア粒度に合わせる
         let span: MKCoordinateSpan
         switch (pref, city) {
         case (_, .some):
-            // 市区町村レベル — やや狭め
             span = MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
         case (.some, nil):
-            // 都道府県レベル — 広め
-            span = MKCoordinateSpan(latitudeDelta: 1.5, longitudeDelta: 1.5)
+            span = MKCoordinateSpan(latitudeDelta: 1.5,  longitudeDelta: 1.5)
         default:
-            // 施設・住所レベル — ピンポイント
             span = MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
         }
-
         return (pref, city, span)
     }
 
@@ -616,6 +595,103 @@ struct LibraryMapView: View {
     }
 
     enum SearchError: Error { case notFound }
+
+    // MARK: - Search Results Panel
+
+    private var searchResultsPanel: some View {
+        VStack(spacing: 0) {
+            // ハンドル
+            Capsule()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 36, height: 4)
+                .padding(.top, 10)
+
+            // ヘッダー
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("「\(searchLabel)」の図書館")
+                        .font(.headline)
+                        .foregroundColor(.toshoText)
+                    Text("\(appState.lastSearchResults.count)件見つかりました")
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
+                }
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        showResultsPanel = false
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.gray.opacity(0.5))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            // リスト
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(appState.lastSearchResults) { library in
+                        Button {
+                            withAnimation(.spring(response: 0.3)) {
+                                showResultsPanel = false
+                                selectedLibrary = library
+                                cameraPosition = .region(MKCoordinateRegion(
+                                    center: library.coordinate,
+                                    span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+                                ))
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "building.columns.fill")
+                                    .font(.subheadline)
+                                    .foregroundColor(.white)
+                                    .frame(width: 36, height: 36)
+                                    .background(
+                                        appState.visitedLibraryIds.contains(library.id)
+                                            ? Color.toshoAmber : Color.toshoGreen
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(library.name)
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(.toshoText)
+                                        .lineLimit(1)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "mappin.circle.fill")
+                                            .font(.caption2)
+                                            .foregroundColor(.toshoGreen)
+                                        Text(library.address)
+                                            .font(.caption)
+                                            .foregroundColor(.toshoSubtext)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.toshoSubtext)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                        }
+                        Divider().padding(.leading, 64)
+                    }
+                }
+            }
+            .frame(maxHeight: 340)
+        }
+        .background(Color.toshoCard)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.15), radius: 16, y: -4)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
+    }
 }
 
 // MARK: - Map Pin

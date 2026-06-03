@@ -16,6 +16,8 @@ class AppState: ObservableObject {
     @Published var apiLibraries: [Library] = []
     @Published var isLoadingLibraries = false
     @Published var apiError: String?  // map view から直接クリア可能
+    /// 直近の検索で取得した図書館リスト（結果パネル表示用）
+    @Published var lastSearchResults: [Library] = []
 
     // MARK: - Computed
 
@@ -83,16 +85,9 @@ class AppState: ObservableObject {
                 longitude: longitude,
                 limit: 50
             )
-            // 重複を避けて追加（libId が同じものは上書き）
-            var byLibId = Dictionary(apiLibraries.compactMap { l -> (String, Library)? in
-                guard let lid = l.libId else { return nil }
-                return (lid, l)
-            }, uniquingKeysWith: { _, new in new })
-
-            for dto in dtos {
-                byLibId[dto.libid] = dto.toLibrary()
-            }
-            apiLibraries = Array(byLibId.values)
+            let newLibraries = dtos.map { $0.toLibrary() }
+            mergeIntoApiLibraries(newLibraries)
+            lastSearchResults = newLibraries
         } catch {
             apiError = error.localizedDescription
         }
@@ -106,16 +101,27 @@ class AppState: ObservableObject {
         apiError = nil
         do {
             let dtos = try await CalilAPIService.shared.fetchLibraries(pref: pref, city: city)
-            var byLibId = Dictionary(apiLibraries.compactMap { l -> (String, Library)? in
-                guard let lid = l.libId else { return nil }
-                return (lid, l)
-            }, uniquingKeysWith: { _, new in new })
-            for dto in dtos { byLibId[dto.libid] = dto.toLibrary() }
-            apiLibraries = Array(byLibId.values)
+            let newLibraries = dtos.map { $0.toLibrary() }
+            mergeIntoApiLibraries(newLibraries)
+            lastSearchResults = newLibraries
         } catch {
             apiError = error.localizedDescription
         }
         isLoadingLibraries = false
+    }
+
+    private func mergeIntoApiLibraries(_ newLibraries: [Library]) {
+        var byLibId = Dictionary(
+            apiLibraries.compactMap { l -> (String, Library)? in
+                guard let lid = l.libId else { return nil }
+                return (lid, l)
+            },
+            uniquingKeysWith: { _, new in new }
+        )
+        for lib in newLibraries {
+            if let lid = lib.libId { byLibId[lid] = lib }
+        }
+        apiLibraries = Array(byLibId.values)
     }
 
     // MARK: - API: 蔵書確認

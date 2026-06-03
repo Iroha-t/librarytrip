@@ -50,28 +50,37 @@ struct CalilLibraryDTO: Sendable {
     }
 }
 
-extension CalilLibraryDTO: Decodable {
-    private enum CodingKeys: String, CodingKey {
-        case systemid, systemname, libkey, libid, short, formal
-        case url_pc, address, pref, city, post, tel, geocode, category, distance
-    }
-    init(from decoder: any Decoder) throws {
-        let c  = try decoder.container(keyedBy: CodingKeys.self)
-        systemid   = try c.decode(String.self,  forKey: .systemid)
-        systemname = try c.decode(String.self,  forKey: .systemname)
-        libkey     = try c.decode(String.self,  forKey: .libkey)
-        libid      = try c.decode(String.self,  forKey: .libid)
-        short      = try c.decodeIfPresent(String.self, forKey: .short)
-        formal     = try c.decode(String.self,  forKey: .formal)
-        url_pc     = try c.decodeIfPresent(String.self, forKey: .url_pc)
-        address    = try c.decode(String.self,  forKey: .address)
-        pref       = try c.decode(String.self,  forKey: .pref)
-        city       = try c.decode(String.self,  forKey: .city)
-        post       = try c.decodeIfPresent(String.self, forKey: .post)
-        tel        = try c.decodeIfPresent(String.self, forKey: .tel)
-        geocode    = try c.decodeIfPresent(String.self, forKey: .geocode)
-        category   = try c.decodeIfPresent(String.self, forKey: .category)
-        distance   = try c.decodeIfPresent(String.self, forKey: .distance)
+extension CalilLibraryDTO {
+    /// JSONSerialization で得た辞書から生成する。
+    /// as? キャストは型不一致・null でも throw せず nil を返すだけなので完全に安全。
+    nonisolated init?(dict: [String: Any]) {
+        // systemid / libkey / libid がないエントリは使い物にならないので弾く
+        guard
+            let sid = dict["systemid"] as? String,
+            let lk  = dict["libkey"]   as? String,
+            let lid = dict["libid"]    as? String
+        else { return nil }
+
+        systemid   = sid
+        libkey     = lk
+        libid      = lid
+        systemname = dict["systemname"] as? String ?? ""
+        short      = dict["short"]      as? String
+        formal     = dict["formal"]     as? String ?? ""
+        url_pc     = dict["url_pc"]     as? String
+        address    = dict["address"]    as? String ?? ""
+        pref       = dict["pref"]       as? String ?? ""
+        city       = dict["city"]       as? String ?? ""
+        post       = dict["post"]       as? String
+        tel        = dict["tel"]        as? String
+        geocode    = dict["geocode"]    as? String
+        category   = dict["category"]  as? String
+        // distance は geocode 検索時に数値で返ってくる
+        if let d = dict["distance"] as? Double {
+            distance = String(d)
+        } else {
+            distance = dict["distance"] as? String
+        }
     }
 }
 
@@ -174,14 +183,16 @@ actor CalilAPIService {
 
         var components = URLComponents(string: "\(baseURL)/library")!
         components.queryItems = [
-            URLQueryItem(name: "appkey", value: Self.appKey),
-            URLQueryItem(name: "geocode", value: "\(longitude),\(latitude)"),
-            URLQueryItem(name: "limit", value: "\(limit)"),
-            URLQueryItem(name: "format", value: "json"),
-            // ⚠️ /library は callback 不要。付けると JSONP 形式で返ってきてデコード失敗する
+            URLQueryItem(name: "appkey",   value: Self.appKey),
+            URLQueryItem(name: "geocode",  value: "\(longitude),\(latitude)"),
+            URLQueryItem(name: "limit",    value: "\(limit)"),
+            URLQueryItem(name: "format",   value: "json"),
+            // API仕様: "callback に空白を指定" → プレーン JSON が返る
+            URLQueryItem(name: "callback", value: " "),
         ]
-        let result = try await fetchDecodable([CalilLibraryDTO].self, from: components.url!)
-        libraryCache[geocodeKey] = result
+        let result = try await fetchLibraryArray(from: components.url!)
+        // 空配列はキャッシュしない（エラー時の空結果が次回も返ってしまうのを防ぐ）
+        if !result.isEmpty { libraryCache[geocodeKey] = result }
         return result
     }
 
@@ -191,10 +202,11 @@ actor CalilAPIService {
         if let cached = libraryCache[cacheKey] { return cached }
 
         var items: [URLQueryItem] = [
-            URLQueryItem(name: "appkey", value: Self.appKey),
-            URLQueryItem(name: "pref", value: pref),
-            URLQueryItem(name: "format", value: "json"),
-            // ⚠️ /library は callback 不要（付けると JSONP になってデコード失敗）
+            URLQueryItem(name: "appkey",   value: Self.appKey),
+            URLQueryItem(name: "pref",     value: pref),
+            URLQueryItem(name: "format",   value: "json"),
+            // API仕様: "callback に空白を指定" → プレーン JSON が返る
+            URLQueryItem(name: "callback", value: " "),
         ]
         if let city {
             items.append(URLQueryItem(name: "city", value: city))
@@ -205,8 +217,9 @@ actor CalilAPIService {
 
         var components = URLComponents(string: "\(baseURL)/library")!
         components.queryItems = items
-        let result = try await fetchDecodable([CalilLibraryDTO].self, from: components.url!)
-        libraryCache[cacheKey] = result
+        let result = try await fetchLibraryArray(from: components.url!)
+        // 空配列はキャッシュしない
+        if !result.isEmpty { libraryCache[cacheKey] = result }
         return result
     }
 
@@ -245,6 +258,75 @@ actor CalilAPIService {
     }
 
     // MARK: Private
+
+    /// /library エンドポイント専用パーサー（JSONSerialization を使用）
+    ///
+    /// 本番 API キーでは Calil API がデフォルトで JSONP 形式
+    ///   `callback([{...}])`
+    /// を返すため、JSON パース前に JSONP ラッパーを除去する。
+    private nonisolated func fetchLibraryArray(from url: URL) async throws -> [CalilLibraryDTO] {
+        print("[CalilAPI] GET \(url)")
+        let (data, resp) = try await URLSession.shared.data(from: url)
+
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            print("[CalilAPI] ❌ HTTP \(code)")
+            throw CalilAPIError.badStatus(code)
+        }
+
+        // レスポンスの先頭を常にログ出力（デバッグ用）
+        let rawPreview = String(data: data.prefix(80), encoding: .utf8) ?? "(binary)"
+        print("[CalilAPI] 📥 raw(\(data.count)B): \(rawPreview)")
+
+        // JSONP ラッパーを除去してから JSON をパース
+        let jsonData = stripJSONP(from: data)
+
+        guard let json = try? JSONSerialization.jsonObject(with: jsonData) else {
+            let preview = String(data: jsonData.prefix(120), encoding: .utf8) ?? "(binary)"
+            print("[CalilAPI] ❌ JSON parse failed after strip. data: \(preview)")
+            return []
+        }
+
+        guard let array = json as? [[String: Any]] else {
+            print("[CalilAPI] ℹ️ Top-level is not an array, returning []")
+            return []
+        }
+
+        let libraries = array.compactMap { CalilLibraryDTO(dict: $0) }
+        print("[CalilAPI] ✅ Parsed \(libraries.count)/\(array.count) libraries")
+        return libraries
+    }
+
+    /// JSONP ラッパーを除去する
+    ///
+    /// 対応パターン:
+    ///   `callback([...])` `callback([...]);`  → `[...]`
+    ///   `no([...])`       `no([...]);`         → `[...]`
+    ///   プレーン JSON `[...]` / `{...}`         → そのまま返す
+    private nonisolated func stripJSONP(from data: Data) -> Data {
+        guard let raw = String(data: data, encoding: .utf8) else { return data }
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 末尾の `;` を除去（JSONP は `callback([...]);` で終わることがある）
+        if s.hasSuffix(";") {
+            s = String(s.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // JSONP パターン: 識別子 `(` 中身 `)` の形かチェック
+        guard s.last == ")",
+              let parenOpen = s.firstIndex(of: "(") else { return data }
+
+        let prefix = s[s.startIndex ..< parenOpen]
+        guard !prefix.isEmpty,
+              prefix.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" })
+        else { return data }
+
+        let innerStart = s.index(after: parenOpen)
+        let innerEnd   = s.index(before: s.endIndex)
+        let inner      = String(s[innerStart ..< innerEnd])
+        print("[CalilAPI] 📦 JSONP stripped '\(prefix)(...)' → \(inner.prefix(60))...")
+        return inner.data(using: .utf8) ?? data
+    }
 
     private nonisolated func fetchDecodable<T: Decodable>(_ type: T.Type, from url: URL) async throws -> T {
         print("[CalilAPI] GET \(url)")
