@@ -1,0 +1,332 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1386" height="1044" viewBox="0 0 1386 1044" font-family="'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Meiryo',sans-serif">
+  <defs>
+    <clipPath id="phone0"><rect x="62" y="62" width="390" height="844" rx="40"/></clipPath>
+    <clipPath id="phone1"><rect x="500" y="62" width="390" height="844" rx="40"/></clipPath>
+    <clipPath id="phone2"><rect x="938" y="62" width="390" height="844" rx="40"/></clipPath>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2D775D"/>
+      <stop offset="100%" stop-color="#1d5c45"/>
+    </linearGradient>
+    <linearGradient id="mapBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d2e8d8"/>
+      <stop offset="100%" stop-color="#bdd8c4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- Canvas background -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect width="1386" height="1044" fill="#eeeef6"/>
+  <text x="693" y="40" text-anchor="middle" font-size="16" font-weight="bold" fill="#444466">としょたび — Wireframe</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- PHONE 0: ホーム -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- Frame -->
+  <rect x="62" y="62" width="390" height="844" rx="40" fill="white" stroke="#b0b0c0" stroke-width="3"/>
+  <g clip-path="url(#phone0)">
+    <!-- Status bar -->
+    <rect x="62" y="62" width="390" height="44" fill="#f5f5fa"/>
+    <!-- Dynamic island -->
+    <rect x="217" y="68" width="82" height="22" rx="11" fill="#1a1a2e"/>
+    <text x="82" y="85" font-size="11" font-weight="bold" fill="#1a1a2e">9:41</text>
+    <text x="420" y="85" text-anchor="end" font-size="11" fill="#1a1a2e">●●●</text>
+
+    <!-- Header -->
+    <rect x="62" y="106" width="390" height="148" fill="url(#headerGrad)"/>
+    <text x="82" y="138" font-size="20" font-weight="bold" fill="white">としょたび</text>
+    <text x="82" y="158" font-size="11" fill="rgba(255,255,255,0.85)">図書館をめぐって、本と出会おう</text>
+    <!-- Stat badges -->
+    <rect x="78" y="170" width="100" height="38" rx="10" fill="rgba(255,255,255,0.15)"/>
+    <text x="128" y="186" text-anchor="middle" font-size="14" font-weight="bold" fill="white">3</text>
+    <text x="128" y="200" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.8)">訪問済み</text>
+    <rect x="188" y="170" width="100" height="38" rx="10" fill="rgba(255,255,255,0.15)"/>
+    <text x="238" y="186" text-anchor="middle" font-size="14" font-weight="bold" fill="white">5</text>
+    <text x="238" y="200" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.8)">行きたい</text>
+    <rect x="298" y="170" width="100" height="38" rx="10" fill="rgba(255,255,255,0.15)"/>
+    <text x="348" y="186" text-anchor="middle" font-size="14" font-weight="bold" fill="white">2</text>
+    <text x="348" y="200" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.8)">借り中の本</text>
+
+    <!-- Search bar -->
+    <rect x="78" y="238" width="272" height="38" rx="12" fill="white" stroke="#ddd" stroke-width="1"/>
+    <circle cx="97" cy="257" r="7" fill="#c8c8d8"/>
+    <text x="112" y="261" font-size="11" fill="#82829a">図書館名・地名で検索</text>
+    <rect x="358" y="238" width="78" height="38" rx="12" fill="white" stroke="#ddd" stroke-width="1"/>
+    <text x="397" y="261" text-anchor="middle" font-size="14" font-weight="bold" fill="#2D775D">≡</text>
+
+    <!-- ─ Section: 注目の図書館 ─ -->
+    <text x="78" y="304" font-size="13" font-weight="bold" fill="#1a1a2e">✦  注目の図書館</text>
+    <text x="436" y="304" text-anchor="end" font-size="10" fill="#2D775D">すべて見る</text>
+    <!-- Cards -->
+    <rect x="78" y="314" width="150" height="90" rx="14" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="88" y="324" width="130" height="54" rx="8" fill="#dce9e4"/>
+    <circle cx="153" cy="351" r="14" fill="#2D775D"/>
+    <text x="153" y="381" text-anchor="middle" font-size="10" font-weight="bold" fill="#1a1a2e">◯◯図書館 1</text>
+    <text x="153" y="396" text-anchor="middle" font-size="9" fill="#82829a">★ 4.8  東京都</text>
+    <rect x="242" y="314" width="150" height="90" rx="14" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="252" y="324" width="130" height="54" rx="8" fill="#dce9e4"/>
+    <circle cx="317" cy="351" r="14" fill="#2D775D"/>
+    <text x="317" y="381" text-anchor="middle" font-size="10" font-weight="bold" fill="#1a1a2e">◯◯図書館 2</text>
+    <text x="317" y="396" text-anchor="middle" font-size="9" fill="#82829a">★ 4.7  神奈川県</text>
+
+    <!-- ─ Section: ランキング ─ -->
+    <text x="78" y="428" font-size="13" font-weight="bold" fill="#1a1a2e">🏆  図書館ランキング</text>
+    <text x="436" y="428" text-anchor="end" font-size="10" fill="#2D775D">すべて見る</text>
+    <!-- Category chips -->
+    <rect x="78" y="438" width="74" height="22" rx="11" fill="#2D775D"/>
+    <text x="115" y="453" text-anchor="middle" font-size="10" fill="white">評価が高い</text>
+    <rect x="158" y="438" width="80" height="22" rx="11" fill="#dce9e4"/>
+    <text x="198" y="453" text-anchor="middle" font-size="10" fill="#2D775D">建築が美しい</text>
+    <rect x="244" y="438" width="58" height="22" rx="11" fill="#dce9e4"/>
+    <text x="273" y="453" text-anchor="middle" font-size="10" fill="#2D775D">勉強向き</text>
+    <rect x="308" y="438" width="60" height="22" rx="11" fill="#dce9e4"/>
+    <text x="338" y="453" text-anchor="middle" font-size="10" fill="#2D775D">カフェ併設</text>
+    <!-- Ranking card -->
+    <rect x="78" y="468" width="358" height="120" rx="14" fill="white" stroke="#ddd" stroke-width="1"/>
+    <!-- Row 1 -->
+    <circle cx="104" cy="494" r="12" fill="#E8A838"/>
+    <text x="104" y="498" text-anchor="middle" font-size="11" font-weight="bold" fill="white">1</text>
+    <text x="126" y="489" font-size="11" font-weight="bold" fill="#1a1a2e">国立国会図書館</text>
+    <text x="126" y="503" font-size="10" fill="#82829a">★ 4.9  東京都千代田区</text>
+    <line x1="126" y1="508" x2="424" y2="508" stroke="#eee" stroke-width="1"/>
+    <!-- Row 2 -->
+    <circle cx="104" cy="528" r="12" fill="#E8A838"/>
+    <text x="104" y="532" text-anchor="middle" font-size="11" font-weight="bold" fill="white">2</text>
+    <text x="126" y="523" font-size="11" font-weight="bold" fill="#1a1a2e">東京都立中央図書館</text>
+    <text x="126" y="537" font-size="10" fill="#82829a">★ 4.8  東京都港区</text>
+    <line x1="126" y1="542" x2="424" y2="542" stroke="#eee" stroke-width="1"/>
+    <!-- Row 3 -->
+    <circle cx="104" cy="562" r="12" fill="#E8A838"/>
+    <text x="104" y="566" text-anchor="middle" font-size="11" font-weight="bold" fill="white">3</text>
+    <text x="126" y="557" font-size="11" font-weight="bold" fill="#1a1a2e">◯◯市立中央図書館</text>
+    <text x="126" y="571" font-size="10" fill="#82829a">★ 4.7  神奈川県横浜市</text>
+
+    <!-- ─ Section: 最近チェック ─ -->
+    <text x="78" y="614" font-size="13" font-weight="bold" fill="#1a1a2e">🕐  最近チェックされた図書館</text>
+    <rect x="78" y="624" width="358" height="48" rx="12" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="88" y="632" width="36" height="32" rx="8" fill="#dce9e4"/>
+    <circle cx="106" cy="648" r="8" fill="#2D775D"/>
+    <text x="136" y="643" font-size="11" font-weight="bold" fill="#1a1a2e">◯◯区立図書館</text>
+    <text x="136" y="658" font-size="10" fill="#82829a">東京都 ★ 4.5</text>
+    <rect x="78" y="678" width="358" height="48" rx="12" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="88" y="686" width="36" height="32" rx="8" fill="#dce9e4"/>
+    <circle cx="106" cy="702" r="8" fill="#2D775D"/>
+    <text x="136" y="697" font-size="11" font-weight="bold" fill="#1a1a2e">◯◯市立図書館</text>
+    <text x="136" y="712" font-size="10" fill="#82829a">神奈川県 ★ 4.3</text>
+
+    <!-- Tab bar -->
+    <rect x="62" y="826" width="390" height="80" fill="white"/>
+    <line x1="62" y1="826" x2="452" y2="826" stroke="#ddd" stroke-width="1"/>
+    <!-- Tab 0 active -->
+    <circle cx="127" cy="847" r="10" fill="#2D775D"/>
+    <text x="127" y="865" text-anchor="middle" font-size="10" font-weight="bold" fill="#2D775D">ホーム</text>
+    <!-- Tab 1 -->
+    <circle cx="257" cy="847" r="10" fill="#c8c8d8"/>
+    <text x="257" y="865" text-anchor="middle" font-size="10" fill="#82829a">図書館を探す</text>
+    <!-- Tab 2 -->
+    <circle cx="387" cy="847" r="10" fill="#c8c8d8"/>
+    <text x="387" y="865" text-anchor="middle" font-size="10" fill="#82829a">マップ</text>
+    <!-- Active indicator dots -->
+    <circle cx="127" cy="878" r="3" fill="#2D775D"/>
+  </g>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- PHONE 1: 図書館を探す -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect x="500" y="62" width="390" height="844" rx="40" fill="white" stroke="#b0b0c0" stroke-width="3"/>
+  <g clip-path="url(#phone1)">
+    <!-- Status bar -->
+    <rect x="500" y="62" width="390" height="44" fill="#f5f5fa"/>
+    <rect x="655" y="68" width="82" height="22" rx="11" fill="#1a1a2e"/>
+    <text x="520" y="85" font-size="11" font-weight="bold" fill="#1a1a2e">9:41</text>
+
+    <!-- Nav bar -->
+    <rect x="500" y="106" width="390" height="46" fill="white"/>
+    <text x="695" y="134" text-anchor="middle" font-size="15" font-weight="bold" fill="#1a1a2e">図書館を探す</text>
+    <line x1="500" y1="152" x2="890" y2="152" stroke="#ddd" stroke-width="1"/>
+
+    <!-- Search bar -->
+    <rect x="516" y="162" width="358" height="40" rx="12" fill="white" stroke="#ddd" stroke-width="1.5"/>
+    <circle cx="536" cy="182" r="8" fill="#c8c8d8"/>
+    <text x="553" y="186" font-size="11" fill="#82829a">図書館名・地名・条件で検索</text>
+    <text x="862" y="186" text-anchor="end" font-size="13" fill="#2D775D">⊗</text>
+
+    <!-- Filter chips -->
+    <rect x="516" y="212" width="80" height="24" rx="12" fill="#dce9e4" stroke="#2D775D" stroke-width="1"/>
+    <text x="556" y="228" text-anchor="middle" font-size="10" fill="#2D775D">自習室あり</text>
+    <rect x="604" y="212" width="72" height="24" rx="12" fill="#dce9e4"/>
+    <text x="640" y="228" text-anchor="middle" font-size="10" fill="#2D775D">カフェあり</text>
+    <rect x="684" y="212" width="64" height="24" rx="12" fill="#dce9e4"/>
+    <text x="716" y="228" text-anchor="middle" font-size="10" fill="#2D775D">電源あり</text>
+    <rect x="756" y="212" width="48" height="24" rx="12" fill="#dce9e4"/>
+    <text x="780" y="228" text-anchor="middle" font-size="10" fill="#2D775D">Wi-Fi</text>
+
+    <!-- Results header -->
+    <text x="516" y="258" font-size="12" font-weight="bold" fill="#1a1a2e">47件の図書館</text>
+    <text x="874" y="258" text-anchor="end" font-size="11" fill="#2D775D">並び替え ▾</text>
+
+    <!-- Library list items -->
+    <!-- Item 1 -->
+    <rect x="516" y="268" width="358" height="74" rx="14" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="526" y="278" width="48" height="54" rx="10" fill="#dce9e4"/>
+    <circle cx="550" cy="305" r="14" fill="#2D775D"/>
+    <text x="586" y="292" font-size="12" font-weight="bold" fill="#1a1a2e">国立国会図書館</text>
+    <text x="586" y="308" font-size="10" fill="#82829a">東京都 千代田区</text>
+    <text x="586" y="324" font-size="10" fill="#82829a">★ 4.9  自習室 カフェ 電源 Wi-Fi</text>
+    <text x="866" y="308" text-anchor="end" font-size="14" fill="#2D775D">🔖</text>
+    <!-- Item 2 -->
+    <rect x="516" y="350" width="358" height="74" rx="14" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="526" y="360" width="48" height="54" rx="10" fill="#dce9e4"/>
+    <circle cx="550" cy="387" r="14" fill="#2D775D"/>
+    <text x="586" y="374" font-size="12" font-weight="bold" fill="#1a1a2e">東京都立中央図書館</text>
+    <text x="586" y="390" font-size="10" fill="#82829a">東京都 港区</text>
+    <text x="586" y="406" font-size="10" fill="#82829a">★ 4.8  自習室 カフェ 電源</text>
+    <text x="866" y="390" text-anchor="end" font-size="14" fill="#82829a">🔖</text>
+    <!-- Item 3 -->
+    <rect x="516" y="432" width="358" height="74" rx="14" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="526" y="442" width="48" height="54" rx="10" fill="#dce9e4"/>
+    <circle cx="550" cy="469" r="14" fill="#2D775D"/>
+    <text x="586" y="456" font-size="12" font-weight="bold" fill="#1a1a2e">◯◯市立中央図書館</text>
+    <text x="586" y="472" font-size="10" fill="#82829a">神奈川県 横浜市</text>
+    <text x="586" y="488" font-size="10" fill="#82829a">★ 4.7  自習室 Wi-Fi</text>
+    <text x="866" y="472" text-anchor="end" font-size="14" fill="#82829a">🔖</text>
+    <!-- Item 4 -->
+    <rect x="516" y="514" width="358" height="74" rx="14" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="526" y="524" width="48" height="54" rx="10" fill="#dce9e4"/>
+    <circle cx="550" cy="551" r="14" fill="#E8A838"/>
+    <text x="586" y="538" font-size="12" font-weight="bold" fill="#1a1a2e">◯◯区立図書館</text>
+    <text x="586" y="554" font-size="10" fill="#82829a">大阪府 大阪市</text>
+    <text x="586" y="570" font-size="10" fill="#82829a">★ 4.6  カフェ 電源</text>
+    <text x="866" y="554" text-anchor="end" font-size="14" fill="#82829a">🔖</text>
+    <!-- Item 5 -->
+    <rect x="516" y="596" width="358" height="74" rx="14" fill="white" stroke="#ddd" stroke-width="1"/>
+    <rect x="526" y="606" width="48" height="54" rx="10" fill="#dce9e4"/>
+    <circle cx="550" cy="633" r="14" fill="#2D775D"/>
+    <text x="586" y="620" font-size="12" font-weight="bold" fill="#1a1a2e">◯◯図書館</text>
+    <text x="586" y="636" font-size="10" fill="#82829a">京都府 京都市</text>
+    <text x="586" y="652" font-size="10" fill="#82829a">★ 4.5  自習室 Wi-Fi</text>
+    <text x="866" y="633" text-anchor="end" font-size="14" fill="#82829a">🔖</text>
+
+    <!-- Tab bar -->
+    <rect x="500" y="826" width="390" height="80" fill="white"/>
+    <line x1="500" y1="826" x2="890" y2="826" stroke="#ddd" stroke-width="1"/>
+    <!-- Tab 0 -->
+    <circle cx="565" cy="847" r="10" fill="#c8c8d8"/>
+    <text x="565" y="865" text-anchor="middle" font-size="10" fill="#82829a">ホーム</text>
+    <!-- Tab 1 active -->
+    <circle cx="695" cy="847" r="10" fill="#2D775D"/>
+    <text x="695" y="865" text-anchor="middle" font-size="10" font-weight="bold" fill="#2D775D">図書館を探す</text>
+    <circle cx="695" cy="878" r="3" fill="#2D775D"/>
+    <!-- Tab 2 -->
+    <circle cx="825" cy="847" r="10" fill="#c8c8d8"/>
+    <text x="825" y="865" text-anchor="middle" font-size="10" fill="#82829a">マップ</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- PHONE 2: マップ -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect x="938" y="62" width="390" height="844" rx="40" fill="white" stroke="#b0b0c0" stroke-width="3"/>
+  <g clip-path="url(#phone2)">
+    <!-- Map background -->
+    <rect x="938" y="62" width="390" height="844" fill="url(#mapBg)"/>
+    <!-- Grid / roads -->
+    <line x1="938" y1="260" x2="1328" y2="260" stroke="white" stroke-width="8"/>
+    <line x1="938" y1="480" x2="1328" y2="480" stroke="white" stroke-width="5"/>
+    <line x1="938" y1="640" x2="1328" y2="640" stroke="white" stroke-width="4"/>
+    <line x1="1080" y1="62" x2="1080" y2="826" stroke="white" stroke-width="8"/>
+    <line x1="1200" y1="62" x2="1200" y2="826" stroke="white" stroke-width="5"/>
+    <line x1="990" y1="62" x2="990" y2="826" stroke="white" stroke-width="3"/>
+    <!-- Park area -->
+    <rect x="1090" y="340" width="100" height="80" rx="8" fill="rgba(100,180,120,0.4)"/>
+    <!-- Buildings -->
+    <rect x="950" y="290" width="30" height="40" rx="2" fill="rgba(180,200,190,0.6)"/>
+    <rect x="990" y="300" width="40" height="30" rx="2" fill="rgba(180,200,190,0.6)"/>
+    <rect x="1210" y="510" width="50" height="60" rx="2" fill="rgba(180,200,190,0.6)"/>
+
+    <!-- Map pins -->
+    <!-- Pin 1 (selected/green) at 1080, 230 -->
+    <circle cx="1080" cy="218" r="18" fill="#2D775D" stroke="white" stroke-width="2"/>
+    <polygon points="1073,228 1087,228 1080,240" fill="#2D775D"/>
+    <circle cx="1080" cy="218" r="8" fill="white"/>
+    <circle cx="1080" cy="218" r="4" fill="#2D775D"/>
+    <!-- Pin 2 (amber/visited) at 1180, 350 -->
+    <circle cx="1200" cy="338" r="16" fill="#E8A838" stroke="white" stroke-width="2"/>
+    <polygon points="1194,348 1206,348 1200,360" fill="#E8A838"/>
+    <circle cx="1200" cy="338" r="7" fill="white"/>
+    <circle cx="1200" cy="338" r="3" fill="#E8A838"/>
+    <!-- Pin 3 (green) at 980, 400 -->
+    <circle cx="980" cy="420" r="14" fill="#2D775D" stroke="white" stroke-width="2"/>
+    <polygon points="974,430 986,430 980,440" fill="#2D775D"/>
+    <circle cx="980" cy="420" r="6" fill="white"/>
+    <circle cx="980" cy="420" r="3" fill="#2D775D"/>
+    <!-- Pin 4 at 1250, 500 -->
+    <circle cx="1250" cy="488" r="13" fill="#2D775D" stroke="white" stroke-width="2"/>
+    <polygon points="1244,498 1256,498 1250,508" fill="#2D775D"/>
+
+    <!-- Status bar -->
+    <rect x="938" y="62" width="390" height="44" fill="rgba(250,248,244,0.6)"/>
+    <rect x="1093" y="68" width="82" height="22" rx="11" fill="#1a1a2e"/>
+    <text x="958" y="85" font-size="11" font-weight="bold" fill="#1a1a2e">9:41</text>
+
+    <!-- Search bar -->
+    <rect x="954" y="116" width="358" height="40" rx="12" fill="white" stroke="#ddd" stroke-width="1.5"
+          filter="drop-shadow(0 2px 6px rgba(0,0,0,0.12))"/>
+    <circle cx="974" cy="136" r="8" fill="#c8c8d8"/>
+    <text x="991" y="140" font-size="11" fill="#82829a">図書館名・地名で検索</text>
+
+    <!-- Filter chips on map -->
+    <rect x="954" y="166" width="80" height="24" rx="12" fill="white" stroke="#2D775D" stroke-width="1"
+          filter="drop-shadow(0 1px 4px rgba(0,0,0,0.08))"/>
+    <text x="994" y="182" text-anchor="middle" font-size="10" fill="#2D775D">自習室あり</text>
+    <rect x="842" y="166" width="72" height="24" rx="12" fill="white" stroke="#ddd" stroke-width="1"
+          filter="drop-shadow(0 1px 4px rgba(0,0,0,0.08))"/>
+    <rect x="1042" y="166" width="72" height="24" rx="12" fill="white" stroke="#ddd" stroke-width="1"/>
+    <text x="1078" y="182" text-anchor="middle" font-size="10" fill="#82829a">カフェあり</text>
+    <rect x="1122" y="166" width="64" height="24" rx="12" fill="white" stroke="#ddd" stroke-width="1"/>
+    <text x="1154" y="182" text-anchor="middle" font-size="10" fill="#82829a">電源あり</text>
+
+    <!-- Selected library preview card -->
+    <rect x="948" y="708" width="370" height="110" rx="20" fill="white" stroke="#ddd" stroke-width="1"
+          filter="drop-shadow(0 -4px 16px rgba(0,0,0,0.12))"/>
+    <!-- drag handle -->
+    <rect x="1113" y="716" width="52" height="5" rx="2.5" fill="#c8c8d8"/>
+    <!-- thumb -->
+    <rect x="960" y="726" width="54" height="54" rx="12" fill="#dce9e4"/>
+    <circle cx="987" cy="753" r="16" fill="#2D775D"/>
+    <!-- info -->
+    <text x="1028" y="742" font-size="13" font-weight="bold" fill="#1a1a2e">国立国会図書館</text>
+    <text x="1028" y="758" font-size="10" fill="#82829a">📍 東京都千代田区</text>
+    <text x="1028" y="773" font-size="10" fill="#82829a">★ 4.9  9:00〜17:00</text>
+    <text x="1028" y="787" font-size="10" fill="#2D775D">自習室 ● 電源 ● Wi-Fi ● カフェ</text>
+    <!-- chevron -->
+    <text x="1300" y="757" font-size="20" font-weight="bold" fill="#2D775D">›</text>
+    <!-- bookmark -->
+    <text x="1282" y="742" font-size="14" fill="#2D775D">🔖</text>
+
+    <!-- Tab bar -->
+    <rect x="938" y="826" width="390" height="80" fill="white"/>
+    <line x1="938" y1="826" x2="1328" y2="826" stroke="#ddd" stroke-width="1"/>
+    <!-- Tab 0 -->
+    <circle cx="1003" cy="847" r="10" fill="#c8c8d8"/>
+    <text x="1003" y="865" text-anchor="middle" font-size="10" fill="#82829a">ホーム</text>
+    <!-- Tab 1 -->
+    <circle cx="1133" cy="847" r="10" fill="#c8c8d8"/>
+    <text x="1133" y="865" text-anchor="middle" font-size="10" fill="#82829a">図書館を探す</text>
+    <!-- Tab 2 active -->
+    <circle cx="1263" cy="847" r="10" fill="#2D775D"/>
+    <text x="1263" y="865" text-anchor="middle" font-size="10" font-weight="bold" fill="#2D775D">マップ</text>
+    <circle cx="1263" cy="878" r="3" fill="#2D775D"/>
+  </g>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- Screen labels -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <text x="257" y="932" text-anchor="middle" font-size="16" font-weight="bold" fill="#444466">ホーム</text>
+  <text x="695" y="932" text-anchor="middle" font-size="16" font-weight="bold" fill="#444466">図書館を探す</text>
+  <text x="1133" y="932" text-anchor="middle" font-size="16" font-weight="bold" fill="#444466">マップ</text>
+
+  <!-- Connector lines -->
+  <line x1="257" y1="906" x2="257" y2="914" stroke="#aaa" stroke-width="1.5"/>
+  <line x1="695" y1="906" x2="695" y2="914" stroke="#aaa" stroke-width="1.5"/>
+  <line x1="1133" y1="906" x2="1133" y2="914" stroke="#aaa" stroke-width="1.5"/>
+</svg>

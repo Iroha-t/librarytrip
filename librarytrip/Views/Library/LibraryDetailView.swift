@@ -6,6 +6,7 @@ struct LibraryDetailView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @State private var showReviewSheet = false
+    @State private var showBookCheck = false
 
     private let sampleReviews: [Review] = [
         Review(
@@ -40,6 +41,9 @@ struct LibraryDetailView: View {
                     infoSection
                     featuresSection
                     tagsSection
+                    if library.systemId != nil {
+                        bookCheckBanner
+                    }
                     mapPreviewSection
                     reviewsSection
                 }
@@ -74,6 +78,42 @@ struct LibraryDetailView: View {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
+        }
+        .sheet(isPresented: $showBookCheck) {
+            BookCheckView(library: library)
+                .environmentObject(appState)
+        }
+    }
+
+    // MARK: - 蔵書確認バナー
+
+    private var bookCheckBanner: some View {
+        Button {
+            showBookCheck = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "books.vertical.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.toshoGreen)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("この図書館の蔵書を確認")
+                        .font(.subheadline.bold())
+                        .foregroundColor(.toshoText)
+                    Text("ISBNを入力して貸出状況をチェック")
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.toshoSubtext)
+            }
+            .padding(16)
+            .background(Color.toshoCard)
+            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+            .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 6, y: 2)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
     }
 

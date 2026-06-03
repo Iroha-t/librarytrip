@@ -21,6 +21,12 @@ struct Library: Identifiable {
     var tags: [LibraryTag]
     var description: String
 
+    // カーリルAPI由来フィールド
+    var systemId: String?   // 図書館システムID（蔵書検索に使用）
+    var libKey: String?     // システム内の図書館キー
+    var libId: String?      // カーリル図書館ユニークID
+    var urlPC: String?      // 図書館公式サイトURL
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -40,7 +46,11 @@ struct Library: Identifiable {
         reviewCount: Int = 0,
         imageNames: [String] = [],
         tags: [LibraryTag] = [],
-        description: String = ""
+        description: String = "",
+        systemId: String? = nil,
+        libKey: String? = nil,
+        libId: String? = nil,
+        urlPC: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -60,6 +70,10 @@ struct Library: Identifiable {
         self.imageNames = imageNames
         self.tags = tags
         self.description = description
+        self.systemId = systemId
+        self.libKey = libKey
+        self.libId = libId
+        self.urlPC = urlPC
     }
 }
 
