@@ -8,10 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		6AB24CAF2FD1892900A2809D /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 6AB24CAE2FD1892900A2809D /* Supabase */; };
+		6AB24CBB2FD2CA3200A2809D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6AB24CBA2FD2CA3200A2809D /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		6A62CAA42FC75AA20049887F /* librarytrip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = librarytrip.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6AB24CBA2FD2CA3200A2809D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -39,6 +41,7 @@
 			children = (
 				6A62CAA62FC75AA20049887F /* librarytrip */,
 				6A62CAA52FC75AA20049887F /* Products */,
+				6AB24CBA2FD2CA3200A2809D /* PrivacyInfo.xcprivacy */,
 			);
 			sourceTree = "<group>";
 		};
@@ -118,6 +121,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6AB24CBB2FD2CA3200A2809D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
