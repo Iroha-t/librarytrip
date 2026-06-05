@@ -28,6 +28,7 @@ struct MyTripView: View {
                 Text("きろく")
                     .font(.title2.bold())
                     .foregroundColor(.white)
+                    .padding(16)
 
                 HStack(spacing: 16) {
                     statCard(
@@ -52,7 +53,7 @@ struct MyTripView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
-            .padding(.top, 56)
+            .padding(.top, 20)
         }
     }
 
@@ -158,7 +159,8 @@ struct MyTripView: View {
     }
 
     private func visitCard(_ library: Library) -> some View {
-        HStack(spacing: 14) {
+        let myReview = appState.review(for: library)
+        return HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(LinearGradient(
@@ -184,9 +186,26 @@ struct MyTripView: View {
                         .font(.caption)
                         .foregroundColor(.toshoSubtext)
                 }
-                HStack(spacing: 2) {
-                    ForEach(library.tags.prefix(2), id: \.rawValue) { tag in
-                        TagChip(tag: tag)
+                if let myReview {
+                    HStack(spacing: 2) {
+                        ForEach(0..<5, id: \.self) { i in
+                            Image(systemName: i < myReview.rating ? "star.fill" : "star")
+                                .font(.caption2)
+                                .foregroundColor(.toshoAmber)
+                        }
+                        if !myReview.comment.isEmpty {
+                            Text(myReview.comment)
+                                .font(.caption)
+                                .foregroundColor(.toshoSubtext)
+                                .lineLimit(1)
+                                .padding(.leading, 4)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 2) {
+                        ForEach(library.tags.prefix(2), id: \.rawValue) { tag in
+                            TagChip(tag: tag)
+                        }
                     }
                 }
             }

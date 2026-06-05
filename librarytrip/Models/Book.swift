@@ -99,39 +99,3 @@ enum BookGenre: String, CaseIterable {
     }
 }
 
-extension Book {
-    static let sampleBooks: [Book] = [
-        Book(
-            title: "ノルウェイの森",
-            author: "村上春樹",
-            genre: .novel,
-            borrowDate: Calendar.current.date(byAdding: .day, value: -7, to: Date()),
-            returnDueDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
-            status: .borrowed,
-            memo: "石川県立図書館で借りた"
-        ),
-        Book(
-            title: "建築の解体",
-            author: "磯崎新",
-            genre: .art,
-            borrowDate: Calendar.current.date(byAdding: .day, value: -3, to: Date()),
-            returnDueDate: Calendar.current.date(byAdding: .day, value: 11, to: Date()),
-            status: .borrowed
-        ),
-        Book(
-            title: "羊をめぐる冒険",
-            author: "村上春樹",
-            genre: .novel,
-            returnedDate: Calendar.current.date(byAdding: .day, value: -5, to: Date()),
-            status: .read,
-            rating: 5,
-            memo: "不思議な世界観。続きが読みたい。"
-        ),
-        Book(
-            title: "旅する図書館",
-            author: "ゆずき真生",
-            genre: .travel,
-            status: .wantToRead
-        ),
-    ]
-}

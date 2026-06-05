@@ -22,43 +22,65 @@ struct LibraryMapView: View {
     @State private var showResultsPanel = false
     @State private var searchLabel = ""   // 検索ラベル（例: "杉並区"）
 
-    // フィルタ
-    @State private var filterStudy = false
-    @State private var filterCafe  = false
-    @State private var filterWifi  = false
-    @State private var filterPower = false
+    // カテゴリーフィルタ
+    @State private var selectedCategory: LibraryCategory?
 
     // 「この周辺を検索」
     @State private var showSearchHereButton = false
     @State private var lastFetchedCenter: CLLocationCoordinate2D?
 
+    // 検索済みフラグ（false=ウィッシュリストのみ表示、true=検索結果を表示）
+    @State private var hasSearched = false
+
     // MARK: - Filtered libraries
 
     var filteredLibraries: [Library] {
-        appState.allLibraries.filter { lib in
-            let matchesStudy = !filterStudy || lib.hasStudyRoom
-            let matchesCafe  = !filterCafe  || lib.hasCafe
-            let matchesWifi  = !filterWifi  || lib.hasWifi
-            let matchesPower = !filterPower || lib.hasPowerOutlets
-            return matchesStudy && matchesCafe && matchesWifi && matchesPower
+        let base: [Library] = hasSearched
+            ? appState.lastSearchResults
+            : appState.wishlistLibraries
+
+        return base.filter { lib in
+            guard let selectedCategory else { return true }
+            return lib.category == selectedCategory
         }
     }
 
     // MARK: - Body
 
     var body: some View {
-        ZStack(alignment: .top) {
-            mapLayer
-            overlayLayer
+        ZStack {
+            ZStack(alignment: .top) {
+                mapLayer
+                overlayLayer
+            }
+            // ピンが0件かつ読み込み中のときだけ中央にスピナーを表示
+            if filteredLibraries.isEmpty && (appState.isLoadingLibraries || isGeocoding) {
+                centerLoadingOverlay
+            }
         }
         .sheet(isPresented: $showDetail) {
             if let lib = selectedLibrary {
                 LibraryDetailView(library: lib).environmentObject(appState)
             }
         }
-        .task {
-            await appState.fetchNearbyLibraries(latitude: 35.6762, longitude: 139.6503)
+        .onChange(of: showDetail) { _, new in appState.isPresentingDetailSheet = new }
+    }
+
+    private var centerLoadingOverlay: some View {
+        VStack(spacing: 14) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .tint(Color.toshoRed)
+                .scaleEffect(1.4)
+            Text(isGeocoding ? "場所を検索中..." : "図書館を読み込み中...")
+                .font(.subheadline)
+                .foregroundColor(.toshoSubtext)
         }
+        .padding(.horizontal, 32)
+        .padding(.vertical, 24)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.15), radius: 16, y: 6)
     }
 
     // MARK: - Map
@@ -155,6 +177,8 @@ struct LibraryMapView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        // タブバー分（高さ60 + bottom padding 10 + 余白8 = 78）だけ底上げ
+        .padding(.bottom, 100)
     }
 
     // MARK: - Top bar
@@ -188,6 +212,8 @@ struct LibraryMapView: View {
                             searchText = ""
                             suggestions = []
                             geocodeError = nil
+                            hasSearched = false
+                            showResultsPanel = false
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.toshoSubtext)
@@ -214,14 +240,13 @@ struct LibraryMapView: View {
             .padding(.horizontal, 16)
             .animation(.easeInOut(duration: 0.2), value: isSearchFocused)
 
-            // フィルタチップ（フォーカス中は非表示）
+            // カテゴリーフィルタチップ（フォーカス中は非表示）
             if !isSearchFocused {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        filterChip(label: "自習室", icon: "pencil",         isOn: $filterStudy)
-                        filterChip(label: "カフェ",  icon: "cup.and.saucer", isOn: $filterCafe)
-                        filterChip(label: "Wi-Fi",  icon: "wifi",           isOn: $filterWifi)
-                        filterChip(label: "電源",    icon: "bolt",           isOn: $filterPower)
+                        ForEach(LibraryCategory.allCases, id: \.self) { cat in
+                            categoryChip(cat)
+                        }
                         // 件数バッジ
                         Text("\(filteredLibraries.count)件")
                             .font(.caption)
@@ -370,13 +395,14 @@ struct LibraryMapView: View {
 
             HStack(spacing: 14) {
                 ZStack {
+                    let cardColor = library.category?.color ?? .toshoGreen
                     RoundedRectangle(cornerRadius: 12)
                         .fill(LinearGradient(
-                            colors: [Color.toshoGreen.opacity(0.7), Color.toshoGreen],
+                            colors: [cardColor.opacity(0.7), cardColor],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         ))
                         .frame(width: 70, height: 70)
-                    Image(systemName: "building.columns.fill")
+                    Image(systemName: library.category?.icon ?? "building.columns.fill")
                         .font(.system(size: 28))
                         .foregroundColor(.white.opacity(0.85))
                 }
@@ -441,15 +467,18 @@ struct LibraryMapView: View {
 
     // MARK: - Sub-views
 
-    private func filterChip(label: String, icon: String, isOn: Binding<Bool>) -> some View {
-        Button { isOn.wrappedValue.toggle() } label: {
+    private func categoryChip(_ category: LibraryCategory) -> some View {
+        let isSelected = selectedCategory == category
+        return Button {
+            selectedCategory = isSelected ? nil : category
+        } label: {
             HStack(spacing: 4) {
-                Image(systemName: icon).font(.caption)
-                Text(label).font(.caption)
+                Image(systemName: category.icon).font(.caption)
+                Text(category.label).font(.caption)
             }
-            .foregroundColor(isOn.wrappedValue ? .white : .toshoGreen)
+            .foregroundColor(isSelected ? .white : category.color)
             .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(isOn.wrappedValue ? Color.toshoGreen : Color.toshoCard)
+            .background(isSelected ? category.color : Color.toshoCard)
             .clipShape(Capsule())
             .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
         }
@@ -493,10 +522,16 @@ struct LibraryMapView: View {
         }
     }
 
-    /// テキスト送信 → CLGeocoder → 地図移動 → Calil API 取得 → 結果パネル表示
+    /// テキスト送信 → ジオコーディング → API取得 → カメラ移動（データ取得後に移動）→ 結果パネル表示
+    ///
+    /// カメラを動かす前にデータを取得する理由:
+    ///   SwiftUI Map は「カメラ移動アニメーション中に ForEach データが変わっても
+    ///   新しい Annotation を描画しない」という挙動がある。
+    ///   データが揃った状態でカメラを移動すれば、移動先でピンが即座に表示される。
     private func search() async {
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return }
+        print("[Search] ▶️ 開始 query='\(query)'")
 
         isSearchFocused = false
         suggestions = []
@@ -504,83 +539,136 @@ struct LibraryMapView: View {
         geocodeError = nil
         showResultsPanel = false
 
-        guard let request = MKGeocodingRequest(addressString: query + " 日本") else {
-            geocodeError = "「\(query)」の場所が見つかりませんでした"
-            isGeocoding = false
-            return
-        }
         do {
-            // "日本" を付けることで国内ヒット率を上げる
-            let mapItems: [MKMapItem] = try await withCheckedThrowingContinuation { continuation in
+            // ── STEP 1: ジオコーディング ──────────────────────────────
+            guard let request = MKGeocodingRequest(addressString: query + " 日本") else {
+                throw SearchError.notFound
+            }
+            let mapItems: [MKMapItem] = try await withCheckedThrowingContinuation { cont in
                 request.getMapItems { items, error in
-                    if let error { continuation.resume(throwing: error) }
-                    else { continuation.resume(returning: items ?? []) }
+                    if let error { cont.resume(throwing: error) }
+                    else { cont.resume(returning: items ?? []) }
                 }
             }
+            print("[Search] ジオコーディング結果 \(mapItems.count)件")
             guard let mapItem = mapItems.first else {
+                print("[Search] ❌ mapItems 空")
                 throw SearchError.notFound
             }
 
-            let placemark               = mapItem.placemark
-            let coordinate              = placemark.coordinate
-            let (pref, city, span)      = calilParams(from: placemark, query: query)
+            let coordinate = mapItem.location.coordinate
+            let addressReps = mapItem.addressRepresentations
+            let locality = addressReps?.cityName
+            let administrativeArea = Self.extractPrefecture(
+                from: addressReps?.fullAddress(includingRegion: false, singleLine: true)
+            )
+            print("[Search] address: adminArea='\(administrativeArea ?? "nil")' locality='\(locality ?? "nil")'")
+            print("[Search] coordinate: lat=\(coordinate.latitude) lon=\(coordinate.longitude)")
 
+            let (_, _, span) = calilParams(administrativeArea: administrativeArea, locality: locality, query: query)
+
+            lastFetchedCenter    = coordinate
+            showSearchHereButton = false
+
+            // ── STEP 2: データ取得（カメラはまだ動かさない）────────────
+            // geocode ベースの近隣検索を使うことで全件に座標が付き、ピンが正確な位置に立つ
+            print("[Search] → fetchNearbyLibraries(lat:\(coordinate.latitude), lon:\(coordinate.longitude)) を呼ぶ")
+            await appState.fetchNearbyLibraries(
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude
+            )
+            print("[Search] fetch完了 lastSearchResults=\(appState.lastSearchResults.count)件")
+
+            // ── STEP 3: データが揃った状態でカメラを移動 ────────────────
+            // ここで移動するとピンが既に filteredLibraries に入っており
+            // Map は描画先が決まった時点で全ピンを一度に描画する
             withAnimation(.easeInOut(duration: 0.5)) {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: coordinate,
                     span: span
                 ))
             }
-            lastFetchedCenter  = coordinate
-            showSearchHereButton = false
 
-            if let pref {
-                await appState.fetchLibraries(pref: pref, city: city)
-            } else {
-                await appState.fetchNearbyLibraries(
-                    latitude: coordinate.latitude,
-                    longitude: coordinate.longitude
-                )
-            }
-
-            // 結果パネルを表示
+            // ── STEP 4: 結果パネル表示 ────────────────────────────────
             if !appState.lastSearchResults.isEmpty {
+                hasSearched = true
                 searchLabel = query
                 withAnimation(.spring(response: 0.4)) {
                     showResultsPanel = true
                 }
+                print("[Search] ✅ 結果パネル表示 \(appState.lastSearchResults.count)件")
             } else {
+                print("[Search] ⚠️ 結果0件 → エラー表示")
                 geocodeError = "「\(query)」周辺に図書館が見つかりませんでした"
             }
         } catch {
+            print("[Search] ❌ error: \(error)")
             geocodeError = "「\(query)」の場所が見つかりませんでした"
         }
         isGeocoding = false
+        print("[Search] ⏹ 終了")
     }
 
-    /// CLPlacemark + クエリから (pref, city?, mapSpan) を解決する
+    /// 住所文字列から都道府県名（都/道/府/県で終わる部分）を抽出する
+    private static func extractPrefecture(from address: String?) -> String? {
+        guard let address else { return nil }
+        // 漢字・ひらがな・カタカナ 2〜4 文字 + 都/道/府/県 にマッチ
+        guard let regex = try? NSRegularExpression(pattern: "[\\u4e00-\\u9fff\\u3040-\\u30ff]{2,4}[都道府県]"),
+              let match = regex.firstMatch(in: address, range: NSRange(address.startIndex..., in: address)),
+              let range = Range(match.range, in: address)
+        else { return nil }
+        return String(address[range])
+    }
+
+    /// query の末尾パターンと placemark から Calil API の pref/city を決定する
     ///
-    /// - `administrativeArea` → 都道府県 ("東京都" など)
-    /// - `locality`           → 市区 ("杉並区" など)
-    /// - クエリが 市/区/町/村/郡 で終わる場合はそれを city として優先使用
+    /// ポイント: geocoder の administrativeArea はロケールによって英語になることがあるため、
+    /// query 自体が都道府県名・市区町村名のときは query を直接使う。
+    ///
+    /// | query の末尾 | pref         | city          | 例                      |
+    /// |-------------|-------------|---------------|------------------------|
+    /// | 都/道/府/県  | query をそのまま | nil（県全体）  | "石川県" → pref=石川県   |
+    /// | 市/区/町/村/郡 | geocoder    | query をそのまま | "杉並区" → city=杉並区  |
+    /// | それ以外      | geocoder    | geocoder locality | "渋谷" "図書館" など   |
     private func calilParams(
-        from placemark: CLPlacemark,
+        administrativeArea: String?,
+        locality: String?,
         query: String
     ) -> (pref: String?, city: String?, span: MKCoordinateSpan) {
 
-        let pref = placemark.administrativeArea   // 例: "東京都"
+        let isPrefQuery  = ["都", "道", "府", "県"].contains { query.hasSuffix($0) }
+        let isCityQuery  = ["市", "区", "町", "村", "郡"].contains { query.hasSuffix($0) }
 
-        let isCityQuery = ["市", "区", "町", "村", "郡"].contains { query.hasSuffix($0) }
-        let city: String? = isCityQuery ? query : placemark.locality
+        let pref: String?
+        let city: String?
+
+        if isPrefQuery {
+            // "石川県"・"東京都" など → query そのものを pref に、city は不要
+            pref = query
+            city = nil
+        } else if isCityQuery {
+            // "杉並区"・"金沢市" など → geocoder で都道府県を取得し、city は query
+            pref = administrativeArea
+            city = query
+        } else {
+            // 施設名・住所・略称 → 両方 geocoder に任せる
+            pref = administrativeArea
+            city = locality
+        }
+
+        print("[Search] calilParams決定 isPref=\(isPrefQuery) isCity=\(isCityQuery) pref='\(pref ?? "nil")' city='\(city ?? "nil")'")
 
         let span: MKCoordinateSpan
-        switch (pref, city) {
-        case (_, .some):
+        switch (isPrefQuery, isCityQuery) {
+        case (true, _):
+            // 都道府県全体 → 広いズーム
+            span = MKCoordinateSpan(latitudeDelta: 2.0, longitudeDelta: 2.0)
+        case (_, true):
+            // 市区町村 → 中程度
             span = MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
-        case (.some, nil):
-            span = MKCoordinateSpan(latitudeDelta: 1.5,  longitudeDelta: 1.5)
         default:
-            span = MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+            // 施設・住所 → ピンポイント
+            span = MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         }
         return (pref, city, span)
     }
@@ -592,6 +680,9 @@ struct LibraryMapView: View {
         lastFetchedCenter = center
         showSearchHereButton = false
         await appState.fetchNearbyLibraries(latitude: center.latitude, longitude: center.longitude)
+        if !appState.lastSearchResults.isEmpty {
+            hasSearched = true
+        }
     }
 
     enum SearchError: Error { case notFound }
@@ -647,13 +738,13 @@ struct LibraryMapView: View {
                             }
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "building.columns.fill")
+                                Image(systemName: library.category?.icon ?? "building.columns.fill")
                                     .font(.subheadline)
                                     .foregroundColor(.white)
                                     .frame(width: 36, height: 36)
                                     .background(
                                         appState.visitedLibraryIds.contains(library.id)
-                                            ? Color.toshoAmber : Color.toshoGreen
+                                            ? Color.toshoAmber : (library.category?.color ?? .toshoGreen)
                                     )
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
@@ -701,19 +792,23 @@ struct LibraryMapPin: View {
     let isSelected: Bool
     let isVisited: Bool
 
+    private var pinColor: Color {
+        isVisited ? .toshoAmber : (library.category?.color ?? .toshoGreen)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 Circle()
-                    .fill(isVisited ? Color.toshoAmber : Color.toshoGreen)
+                    .fill(pinColor)
                     .frame(width: isSelected ? 44 : 34, height: isSelected ? 44 : 34)
-                    .shadow(color: (isVisited ? Color.toshoAmber : Color.toshoGreen).opacity(0.4), radius: 4)
-                Image(systemName: "building.columns.fill")
+                    .shadow(color: pinColor.opacity(0.4), radius: 4)
+                Image(systemName: library.category?.icon ?? "building.columns.fill")
                     .font(.system(size: isSelected ? 18 : 14))
                     .foregroundColor(.white)
             }
             Triangle()
-                .fill(isVisited ? Color.toshoAmber : Color.toshoGreen)
+                .fill(pinColor)
                 .frame(width: 10, height: 6)
         }
         .scaleEffect(isSelected ? 1.15 : 1.0)

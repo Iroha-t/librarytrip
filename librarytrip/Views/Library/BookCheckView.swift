@@ -271,6 +271,17 @@ struct BookCheckView: View {
 }
 
 #Preview {
-    BookCheckView(library: Library.sampleLibraries[0])
-        .environmentObject(AppState())
+    BookCheckView(library: Library(
+        name: "東京都立中央図書館",
+        prefecture: "東京都",
+        city: "港区",
+        address: "港区南麻布5-7-13",
+        latitude: 35.6497,
+        longitude: 139.7284,
+        openingHours: "9:00〜20:00",
+        closedDays: "月曜日",
+        collectionCount: 1_800_000,
+        systemId: "Tokyo_Pref"
+    ))
+    .environmentObject(AppState())
 }

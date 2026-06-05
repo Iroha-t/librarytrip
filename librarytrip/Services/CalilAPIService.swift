@@ -45,7 +45,8 @@ struct CalilLibraryDTO: Sendable {
             systemId: systemid,
             libKey: libkey,
             libId: libid,
-            urlPC: url_pc
+            urlPC: url_pc,
+            category: category.flatMap { LibraryCategory(rawValue: $0) }
         )
     }
 }
@@ -59,7 +60,10 @@ extension CalilLibraryDTO {
             let sid = dict["systemid"] as? String,
             let lk  = dict["libkey"]   as? String,
             let lid = dict["libid"]    as? String
-        else { return nil }
+        else {
+            print("[CalilAPI] ⚠️ DTO変換スキップ: systemid/libkey/libid 欠損 dict=\(dict.keys.sorted())")
+            return nil
+        }
 
         systemid   = sid
         libkey     = lk
@@ -179,18 +183,26 @@ actor CalilAPIService {
         limit: Int = 30
     ) async throws -> [CalilLibraryDTO] {
         let geocodeKey = String(format: "%.3f,%.3f", longitude, latitude)
-        if let cached = libraryCache[geocodeKey] { return cached }
+        if let cached = libraryCache[geocodeKey] {
+            print("[CalilAPI] 💾 キャッシュヒット geocodeKey=\(geocodeKey) (\(cached.count)件)")
+            return cached
+        }
+        print("[CalilAPI] 🌐 geocode検索 key=\(geocodeKey) appkey=\(Self.appKey.prefix(8))...")
 
         var components = URLComponents(string: "\(baseURL)/library")!
         components.queryItems = [
-            URLQueryItem(name: "appkey",   value: Self.appKey),
-            URLQueryItem(name: "geocode",  value: "\(longitude),\(latitude)"),
-            URLQueryItem(name: "limit",    value: "\(limit)"),
-            URLQueryItem(name: "format",   value: "json"),
-            // API仕様: "callback に空白を指定" → プレーン JSON が返る
-            URLQueryItem(name: "callback", value: " "),
+            URLQueryItem(name: "appkey",  value: Self.appKey),
+            URLQueryItem(name: "geocode", value: "\(longitude),\(latitude)"),
+            URLQueryItem(name: "limit",   value: "\(limit)"),
+            URLQueryItem(name: "format",  value: "json"),
+            // callback パラメータなし → API は JSONP callback([...]) を返す
+            // fetchLibraryArray 内の stripJSONP がラッパーを除去する
         ]
-        let result = try await fetchLibraryArray(from: components.url!)
+        guard let url = components.url else {
+            print("[CalilAPI] ❌ URL構築失敗")
+            return []
+        }
+        let result = try await fetchLibraryArray(from: url)
         // 空配列はキャッシュしない（エラー時の空結果が次回も返ってしまうのを防ぐ）
         if !result.isEmpty { libraryCache[geocodeKey] = result }
         return result
@@ -199,25 +211,30 @@ actor CalilAPIService {
     /// 都道府県（＋市区町村）で図書館を取得
     func fetchLibraries(pref: String, city: String? = nil) async throws -> [CalilLibraryDTO] {
         let cacheKey = pref + (city ?? "")
-        if let cached = libraryCache[cacheKey] { return cached }
+        if let cached = libraryCache[cacheKey] {
+            print("[CalilAPI] 💾 キャッシュヒット cacheKey=\(cacheKey) (\(cached.count)件)")
+            return cached
+        }
+        print("[CalilAPI] 🌐 pref/city検索 pref=\(pref) city=\(city ?? "nil") appkey=\(Self.appKey.prefix(8))...")
 
         var items: [URLQueryItem] = [
-            URLQueryItem(name: "appkey",   value: Self.appKey),
-            URLQueryItem(name: "pref",     value: pref),
-            URLQueryItem(name: "format",   value: "json"),
-            // API仕様: "callback に空白を指定" → プレーン JSON が返る
-            URLQueryItem(name: "callback", value: " "),
+            URLQueryItem(name: "appkey", value: Self.appKey),
+            URLQueryItem(name: "pref",   value: pref),
+            URLQueryItem(name: "format", value: "json"),
+            // callback パラメータなし → API は JSONP callback([...]) を返す
+            // fetchLibraryArray 内の stripJSONP がラッパーを除去する
         ]
         if let city {
             items.append(URLQueryItem(name: "city", value: city))
-            print("[CalilAPI] 🔍 pref=\(pref) city=\(city)")
-        } else {
-            print("[CalilAPI] 🔍 pref=\(pref)")
         }
 
         var components = URLComponents(string: "\(baseURL)/library")!
         components.queryItems = items
-        let result = try await fetchLibraryArray(from: components.url!)
+        guard let url = components.url else {
+            print("[CalilAPI] ❌ URL構築失敗")
+            return []
+        }
+        let result = try await fetchLibraryArray(from: url)
         // 空配列はキャッシュしない
         if !result.isEmpty { libraryCache[cacheKey] = result }
         return result

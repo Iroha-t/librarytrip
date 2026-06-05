@@ -5,33 +5,13 @@ struct LibraryDetailView: View {
     let library: Library
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
-    @State private var showReviewSheet = false
-    @State private var showBookCheck = false
 
-    private let sampleReviews: [Review] = [
-        Review(
-            id: UUID(),
-            libraryId: UUID(),
-            userName: "たびびと",
-            userInitial: "た",
-            rating: 5,
-            comment: "圧倒的な建築美！コロッセウムのような吹き抜けが壮大で、思わず何度も見上げてしまいました。蔵書数も多く、一日中いられます。カフェでコーヒーを飲みながら本を読む時間が最高でした。",
-            date: Calendar.current.date(byAdding: .day, value: -3, to: Date())!,
-            tags: [.beautiful, .study],
-            isPublic: true
-        ),
-        Review(
-            id: UUID(),
-            libraryId: UUID(),
-            userName: "読書好き",
-            userInitial: "読",
-            rating: 4,
-            comment: "Wi-Fiも電源もあって快適に過ごせました。週末は混んでいたので平日がおすすめ。",
-            date: Calendar.current.date(byAdding: .day, value: -10, to: Date())!,
-            tags: [.study],
-            isPublic: true
-        ),
-    ]
+    @State private var showVisitReviewSheet = false
+    @State private var showBookCheck = false
+    @State private var publicReviews: [ReviewRow] = []
+    @State private var isLoadingReviews = false
+    @State private var appleMapItem: MKMapItem?
+    @State private var showAppleMapDetail = false
 
     var body: some View {
         NavigationStack {
@@ -39,7 +19,9 @@ struct LibraryDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     heroSection
                     infoSection
-                    featuresSection
+                    if library.hasStudyRoom || library.hasPowerOutlets || library.hasWifi || library.hasCafe {
+                        featuresSection
+                    }
                     tagsSection
                     if library.systemId != nil {
                         bookCheckBanner
@@ -82,6 +64,31 @@ struct LibraryDetailView: View {
         .sheet(isPresented: $showBookCheck) {
             BookCheckView(library: library)
                 .environmentObject(appState)
+        }
+        .sheet(isPresented: $showVisitReviewSheet) {
+            VisitReviewSheet(library: library)
+                .environmentObject(appState)
+        }
+        .sheet(isPresented: $showAppleMapDetail) {
+            if let appleMapItem {
+                MapItemDetailSheet(mapItem: appleMapItem)
+            }
+        }
+        .task {
+            isLoadingReviews = true
+            publicReviews = await appState.loadPublicReviews(for: library)
+            isLoadingReviews = false
+
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = library.name
+            request.region = MKCoordinateRegion(
+                center: library.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            )
+            request.resultTypes = .pointOfInterest
+            if let response = try? await MKLocalSearch(request: request).start() {
+                appleMapItem = response.mapItems.first
+            }
         }
     }
 
@@ -175,11 +182,11 @@ struct LibraryDetailView: View {
                 }
 
                 Button {
-                    appState.toggleVisited(library)
+                    showVisitReviewSheet = true
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: appState.visitedLibraryIds.contains(library.id) ? "checkmark.circle.fill" : "plus.circle.fill")
-                        Text(appState.visitedLibraryIds.contains(library.id) ? "訪問済みに記録済み" : "訪問済みに記録する")
+                        Image(systemName: appState.visitedLibraryIds.contains(library.id) ? "pencil.circle.fill" : "plus.circle.fill")
+                        Text(appState.visitedLibraryIds.contains(library.id) ? "記録を編集する" : "訪問済みに記録する")
                     }
                     .font(.subheadline.bold())
                     .foregroundColor(appState.visitedLibraryIds.contains(library.id) ? .toshoGreen : .white)
@@ -200,8 +207,6 @@ struct LibraryDetailView: View {
             infoRow(icon: "clock", label: "開館時間", value: library.openingHours)
             Divider().padding(.leading, 52)
             infoRow(icon: "calendar.badge.minus", label: "休館日", value: library.closedDays)
-            Divider().padding(.leading, 52)
-            infoRow(icon: "books.vertical", label: "蔵書数", value: "\(library.collectionCount.formatted())冊")
             Divider().padding(.leading, 52)
             infoRow(icon: "mappin.and.ellipse", label: "住所", value: library.address)
         }
@@ -269,6 +274,34 @@ struct LibraryDetailView: View {
             .frame(height: 160)
             .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
             .padding(.horizontal, 16)
+
+            if appleMapItem != nil {
+                Button {
+                    showAppleMapDetail = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "apple.logo")
+                            .foregroundColor(.toshoGreen)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Apple Mapsで詳細を見る")
+                                .font(.subheadline.bold())
+                                .foregroundColor(.toshoText)
+                            Text("開館時間・電話番号など")
+                                .font(.caption)
+                                .foregroundColor(.toshoSubtext)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.toshoSubtext)
+                    }
+                    .padding(14)
+                    .background(Color.toshoCard)
+                    .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.smallCornerRadius))
+                    .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 4, y: 1)
+                    .padding(.horizontal, 16)
+                }
+            }
         }
         .padding(.bottom, 8)
     }
@@ -280,7 +313,7 @@ struct LibraryDetailView: View {
                     .font(.headline)
                 Spacer()
                 Button {
-                    showReviewSheet = true
+                    showVisitReviewSheet = true
                 } label: {
                     Label("書く", systemImage: "pencil")
                         .font(.subheadline)
@@ -289,13 +322,27 @@ struct LibraryDetailView: View {
             }
             .padding(.horizontal, 16)
 
-            ForEach(sampleReviews) { review in
-                ReviewCard(review: review)
-                    .padding(.horizontal, 16)
+            if isLoadingReviews {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            } else if publicReviews.isEmpty {
+                Text("まだ公開レビューがありません")
+                    .font(.subheadline)
+                    .foregroundColor(.toshoSubtext)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            } else {
+                ForEach(publicReviews) { review in
+                    PublicReviewCard(review: review)
+                        .padding(.horizontal, 16)
+                }
             }
         }
         .padding(.bottom, 32)
     }
+
+    // MARK: - Helpers
 
     private func infoRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
@@ -334,49 +381,51 @@ struct LibraryDetailView: View {
     }
 }
 
-struct ReviewCard: View {
-    let review: Review
+// MARK: - Public Review Card
+
+struct PublicReviewCard: View {
+    let review: ReviewRow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Circle()
-                    .fill(Color.toshoGreen.opacity(0.2))
+                    .fill(Color.toshoGreen.opacity(0.15))
                     .frame(width: 36, height: 36)
                     .overlay(
-                        Text(review.userInitial)
-                            .font(.subheadline.bold())
+                        Image(systemName: "person.fill")
+                            .font(.subheadline)
                             .foregroundColor(.toshoGreen)
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(review.userName)
-                        .font(.subheadline.bold())
-                        .foregroundColor(.toshoText)
                     HStack(spacing: 2) {
-                        ForEach(0..<5) { i in
+                        ForEach(0..<5, id: \.self) { i in
                             Image(systemName: i < review.rating ? "star.fill" : "star")
                                 .font(.caption2)
                                 .foregroundColor(.toshoAmber)
                         }
-                        Text(review.date, style: .date)
-                            .font(.caption)
-                            .foregroundColor(.toshoSubtext)
-                            .padding(.leading, 4)
                     }
+                    Text(review.visitedAt)
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
                 }
                 Spacer()
             }
 
-            Text(review.comment)
-                .font(.subheadline)
-                .foregroundColor(.toshoText)
-                .lineLimit(4)
+            if !review.comment.isEmpty {
+                Text(review.comment)
+                    .font(.subheadline)
+                    .foregroundColor(.toshoText)
+                    .lineLimit(4)
+            }
 
             if !review.tags.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(review.tags, id: \.rawValue) { tag in
-                        TagChip(tag: tag)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(review.tags.compactMap { LibraryTag(rawValue: $0) }, id: \.rawValue) { tag in
+                            TagChip(tag: tag)
+                        }
                     }
                 }
             }
@@ -388,7 +437,47 @@ struct ReviewCard: View {
     }
 }
 
+// MARK: - Apple Maps Detail Sheet
+
+private struct MapItemDetailSheet: UIViewControllerRepresentable {
+    let mapItem: MKMapItem
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> MKMapItemDetailViewController {
+        let vc = MKMapItemDetailViewController(mapItem: mapItem, displaysMap: false)
+        vc.delegate = context.coordinator
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: MKMapItemDetailViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(dismiss: dismiss) }
+
+    class Coordinator: NSObject, MKMapItemDetailViewControllerDelegate {
+        let dismiss: DismissAction
+        init(dismiss: DismissAction) { self.dismiss = dismiss }
+        func mapItemDetailViewControllerDidFinish(_ vc: MKMapItemDetailViewController) { dismiss() }
+    }
+}
+
 #Preview {
-    LibraryDetailView(library: Library.sampleLibraries[0])
-        .environmentObject(AppState())
+    LibraryDetailView(library: Library(
+        name: "東京都立中央図書館",
+        prefecture: "東京都",
+        city: "港区",
+        address: "東京都港区南麻布5-7-13",
+        latitude: 35.6497,
+        longitude: 139.7247,
+        openingHours: "9:00〜20:30",
+        closedDays: "第3水曜日",
+        collectionCount: 1900000,
+        hasStudyRoom: true,
+        hasPowerOutlets: true,
+        hasWifi: true,
+        rating: 4.2,
+        reviewCount: 128,
+        tags: [.beautiful, .largeCollection],
+        description: "東京都立の中央図書館。蔵書数は都内最大級。"
+    ))
+    .environmentObject(AppState())
 }
