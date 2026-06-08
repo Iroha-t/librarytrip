@@ -1,15 +1,21 @@
 import SwiftUI
 
-/// カーリルAPIを使った蔵書確認シート
 struct BookCheckView: View {
     let library: Library
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
 
-    @State private var isbnInput = ""
-    @State private var checkResult: CalilCheckResponse?
-    @State private var isChecking = false
-    @State private var errorMessage: String?
+    @State private var titleInput = ""
+    @State private var viewState: CheckViewState = .idle
+
+    enum CheckViewState {
+        case idle
+        case searching
+        case bookList([BookSearchResult])
+        case checking(BookSearchResult)
+        case result(CalilCheckResponse, isbn: String)
+        case error(String)
+    }
 
     var body: some View {
         NavigationStack {
@@ -17,13 +23,7 @@ struct BookCheckView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     libraryHeader
                     inputSection
-                    if isChecking {
-                        checkingView
-                    } else if let result = checkResult {
-                        resultSection(result)
-                    } else if let error = errorMessage {
-                        errorView(error)
-                    }
+                    stateContent
                 }
                 .padding(16)
             }
@@ -39,7 +39,30 @@ struct BookCheckView: View {
         }
     }
 
-    // MARK: - Views
+    // MARK: - State Content
+
+    @ViewBuilder
+    private var stateContent: some View {
+        switch viewState {
+        case .idle:
+            EmptyView()
+        case .searching:
+            loadingCard(message: "本を検索中...")
+        case .bookList(let books):
+            bookListSection(books)
+        case .checking(let book):
+            VStack(spacing: 12) {
+                selectedBookCard(book)
+                loadingCard(message: "図書館に問い合わせ中...\nカーリルAPIにより照会しています（最大数秒かかることがあります）")
+            }
+        case .result(let response, let isbn):
+            resultSection(response, isbn: isbn)
+        case .error(let message):
+            errorView(message)
+        }
+    }
+
+    // MARK: - Header
 
     private var libraryHeader: some View {
         HStack(spacing: 12) {
@@ -49,7 +72,6 @@ struct BookCheckView: View {
                 .frame(width: 44, height: 44)
                 .background(Color.toshoGreen)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-
             VStack(alignment: .leading, spacing: 2) {
                 Text(library.name)
                     .font(.headline)
@@ -65,76 +87,166 @@ struct BookCheckView: View {
         .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 6, y: 2)
     }
 
+    // MARK: - Input
+
     private var inputSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("ISBN で蔵書を検索")
+            Text("本のタイトルで検索")
                 .font(.headline)
                 .foregroundColor(.toshoText)
 
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
-                    Image(systemName: "barcode")
+                    Image(systemName: "magnifyingglass")
                         .foregroundColor(.toshoSubtext)
-                    TextField("例: 9784062748681", text: $isbnInput)
-                        .keyboardType(.numberPad)
+                    TextField("例: 吾輩は猫である", text: $titleInput)
                         .font(.subheadline)
+                        .submitLabel(.search)
+                        .onSubmit { Task { await runSearch() } }
                 }
                 .padding(12)
                 .background(Color.toshoCard)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.toshoGreen.opacity(0.4), lineWidth: 1)
-                )
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.toshoGreen.opacity(0.4), lineWidth: 1))
 
                 Button {
-                    Task { await runCheck() }
+                    Task { await runSearch() }
                 } label: {
-                    Text("確認")
+                    Text("検索")
                         .font(.subheadline.bold())
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(isbnInput.isEmpty ? Color.gray.opacity(0.4) : Color.toshoGreen)
+                        .background(titleInput.trimmingCharacters(in: .whitespaces).isEmpty ? Color.gray.opacity(0.4) : Color.toshoGreen)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .disabled(isbnInput.isEmpty || isChecking)
+                .disabled(titleInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
 
-            Text("ISBNは本の裏表紙のバーコード下に記載されている13桁の番号です")
+            Text("タイトルで本を検索し、蔵書状況を確認したい本を選んでください")
                 .font(.caption)
                 .foregroundColor(.toshoSubtext)
         }
     }
 
-    private var checkingView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.3)
-                .tint(.toshoGreen)
-            Text("図書館に問い合わせ中...")
-                .font(.subheadline)
-                .foregroundColor(.toshoSubtext)
-            Text("カーリルAPIにより照会しています（最大数秒かかることがあります）")
-                .font(.caption)
-                .foregroundColor(.toshoSubtext)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(32)
-        .background(Color.toshoCard)
-        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
-    }
+    // MARK: - Book List
 
-    private func resultSection(_ result: CalilCheckResponse) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("確認結果")
+    private func bookListSection(_ books: [BookSearchResult]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("検索結果 \(books.count)件")
                 .font(.headline)
                 .foregroundColor(.toshoText)
 
-            let cleanIsbn = normalizedISBN
-            let availabilities = result.availabilities(for: cleanIsbn)
+            if books.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title)
+                        .foregroundColor(.toshoSubtext)
+                    Text("該当する本が見つかりませんでした")
+                        .font(.subheadline)
+                        .foregroundColor(.toshoSubtext)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(32)
+                .background(Color.toshoCard)
+                .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+            } else {
+                ForEach(books) { book in
+                    Button {
+                        Task { await runCheck(for: book) }
+                    } label: {
+                        bookRow(book)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
 
+    private func bookRow(_ book: BookSearchResult) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "book.closed.fill")
+                .font(.title3)
+                .foregroundColor(.white)
+                .frame(width: 40, height: 40)
+                .background(Color.toshoGreen.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(book.title)
+                    .font(.subheadline.bold())
+                    .foregroundColor(.toshoText)
+                    .lineLimit(2)
+                if !book.author.isEmpty {
+                    Text(book.author)
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
+                        .lineLimit(1)
+                }
+                if !book.publisher.isEmpty {
+                    Text(book.publisher)
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext.opacity(0.7))
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.toshoSubtext)
+        }
+        .padding(12)
+        .background(Color.toshoCard)
+        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+        .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 4, y: 1)
+    }
+
+    private func selectedBookCard(_ book: BookSearchResult) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "book.closed.fill")
+                .font(.title3)
+                .foregroundColor(.white)
+                .frame(width: 40, height: 40)
+                .background(Color.toshoGreen)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(book.title)
+                    .font(.subheadline.bold())
+                    .foregroundColor(.toshoText)
+                    .lineLimit(2)
+                if !book.author.isEmpty {
+                    Text(book.author)
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
+                }
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.toshoCard)
+        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+        .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 4, y: 1)
+    }
+
+    // MARK: - Result
+
+    private func resultSection(_ result: CalilCheckResponse, isbn: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("確認結果")
+                    .font(.headline)
+                    .foregroundColor(.toshoText)
+                Spacer()
+                Button {
+                    Task { await runSearch() }
+                } label: {
+                    Label("別の本を選ぶ", systemImage: "arrow.left")
+                        .font(.caption)
+                        .foregroundColor(.toshoGreen)
+                }
+            }
+
+            let availabilities = result.availabilities(for: isbn)
             if availabilities.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
@@ -170,7 +282,6 @@ struct BookCheckView: View {
                     }
                 }
             }
-
             if avail.availability.isEmpty {
                 Text("蔵書なし")
                     .font(.subheadline)
@@ -193,6 +304,8 @@ struct BookCheckView: View {
         .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
         .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 6, y: 2)
     }
+
+    // MARK: - Badges
 
     private func statusBadge(_ status: LibraryAvailability.CheckStatus) -> some View {
         let (label, color): (String, Color) = switch status {
@@ -230,6 +343,24 @@ struct BookCheckView: View {
             .clipShape(Capsule())
     }
 
+    // MARK: - Common
+
+    private func loadingCard(message: String) -> some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.3)
+                .tint(.toshoGreen)
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.toshoSubtext)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(32)
+        .background(Color.toshoCard)
+        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+    }
+
     private func errorView(_ message: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -245,28 +376,27 @@ struct BookCheckView: View {
 
     // MARK: - Logic
 
-    private var normalizedISBN: String {
-        isbnInput.filter { $0.isNumber }
+    private func runSearch() async {
+        let query = titleInput.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return }
+        viewState = .searching
+        do {
+            let books = try await CalilAPIService.shared.searchBooks(title: query)
+            viewState = .bookList(books)
+        } catch {
+            viewState = .error("書籍の検索に失敗しました: \(error.localizedDescription)")
+        }
     }
 
-    private func runCheck() async {
+    private func runCheck(for book: BookSearchResult) async {
         guard let systemId = library.systemId else { return }
-        let isbn = normalizedISBN
-        guard isbn.count == 13 || isbn.count == 10 else {
-            errorMessage = "ISBNは10桁または13桁で入力してください"
-            return
-        }
-        isChecking = true
-        checkResult = nil
-        errorMessage = nil
-
-        let result = await appState.checkBookAvailability(isbn: isbn, systemIds: [systemId])
+        viewState = .checking(book)
+        let result = await appState.checkBookAvailability(isbn: book.isbn, systemIds: [systemId])
         if let result {
-            checkResult = result
+            viewState = .result(result, isbn: book.isbn)
         } else {
-            errorMessage = appState.apiError ?? "蔵書の確認に失敗しました"
+            viewState = .error(appState.apiError ?? "蔵書の確認に失敗しました")
         }
-        isChecking = false
     }
 }
 
