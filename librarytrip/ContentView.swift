@@ -4,6 +4,7 @@ struct ContentView: View {
     @StateObject private var appState = AppState()
     @State private var selectedTab = 0
     @State private var showRecordPicker = false
+    @AppStorage("username") private var username = ""
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -51,6 +52,12 @@ struct ContentView: View {
         .sheet(isPresented: $showRecordPicker) {
             LibraryRecordPickerView()
                 .environmentObject(appState)
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { username.isEmpty },
+            set: { _ in }
+        )) {
+            OnboardingView()
         }
     }
 

@@ -3,9 +3,12 @@ import SwiftUI
 struct MyPageView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("username") private var username = ""
 
     @State private var showMyTrip = false
     @State private var showBookRecords = false
+    @State private var showEditNickname = false
+    @State private var nicknameInput = ""
 
     private var readCount: Int {
         appState.books.filter { $0.status == .read }.count
@@ -59,12 +62,32 @@ struct MyPageView: View {
                     .font(.system(size: 32))
                     .foregroundColor(.toshoRed)
             }
-            Text("たびびとさん")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.toshoText)
+            HStack(spacing: 6) {
+                Text("\(username)さん")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.toshoText)
+                Button {
+                    nicknameInput = username
+                    showEditNickname = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13))
+                        .foregroundColor(.toshoSubtext)
+                }
+            }
             Text("図書館をめぐって、本と出会おう")
                 .font(.system(size: 12))
                 .foregroundColor(.toshoSubtext)
+        }
+        .alert("ニックネームを変更", isPresented: $showEditNickname) {
+            TextField("ニックネーム", text: $nicknameInput)
+            Button("キャンセル", role: .cancel) {}
+            Button("保存") {
+                let trimmed = nicknameInput.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty { username = trimmed }
+            }
+        } message: {
+            Text("新しいニックネームを入力してください")
         }
     }
 

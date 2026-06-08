@@ -380,6 +380,47 @@ enum CalilAPIError: LocalizedError {
     }
 }
 
+// MARK: - Book Search (OpenBD)
+
+struct BookSearchResult: Identifiable, Sendable {
+    let id = UUID()
+    let isbn: String
+    let title: String
+    let author: String
+    let publisher: String
+    let coverURL: String?
+}
+
+extension CalilAPIService {
+    func searchBooks(title: String) async throws -> [BookSearchResult] {
+        var components = URLComponents(string: "https://api.openbd.jp/v1/search")!
+        components.queryItems = [
+            URLQueryItem(name: "title", value: title),
+            URLQueryItem(name: "limit", value: "20"),
+        ]
+        guard let url = components.url else { return [] }
+
+        let (data, resp) = try await URLSession.shared.data(from: url)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw CalilAPIError.badStatus((resp as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
+        return json.compactMap { dict -> BookSearchResult? in
+            guard let isbn = dict["isbn"] as? String,
+                  let title = dict["title"] as? String, !title.isEmpty else { return nil }
+            return BookSearchResult(
+                isbn: isbn,
+                title: title,
+                author: dict["author"] as? String ?? "",
+                publisher: dict["publisher"] as? String ?? "",
+                coverURL: dict["cover"] as? String
+            )
+        }
+    }
+}
+
 // MARK: - CalilCheckResponse helpers
 
 extension CalilCheckResponse {

@@ -5,6 +5,7 @@ struct LibraryDetailView: View {
     let library: Library
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
+    @Environment(\.openURL) private var openURL
 
     @State private var showVisitReviewSheet = false
     @State private var showBookCheck = false
@@ -209,6 +210,32 @@ struct LibraryDetailView: View {
             infoRow(icon: "calendar.badge.minus", label: "休館日", value: library.closedDays)
             Divider().padding(.leading, 52)
             infoRow(icon: "mappin.and.ellipse", label: "住所", value: library.address)
+            if let urlString = library.urlPC, let url = URL(string: urlString) {
+                Divider().padding(.leading, 52)
+                Button {
+                    openURL(url)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "globe")
+                            .frame(width: 28)
+                            .foregroundColor(.toshoGreen)
+                        Text("公式サイト")
+                            .font(.subheadline)
+                            .foregroundColor(.toshoSubtext)
+                            .frame(width: 70, alignment: .leading)
+                        Text(url.host ?? urlString)
+                            .font(.subheadline)
+                            .foregroundColor(.toshoGreen)
+                            .lineLimit(1)
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundColor(.toshoSubtext)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+            }
         }
         .background(Color.toshoCard)
         .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))

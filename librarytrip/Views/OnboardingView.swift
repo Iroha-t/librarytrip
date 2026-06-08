@@ -22,7 +22,7 @@ struct OnboardingView: View {
                     }
 
                     VStack(spacing: 8) {
-                        Text("librarytrip へようこそ")
+                        Text("としょたびへようこそ")
                             .font(.system(size: 26, weight: .black))
                             .foregroundColor(.toshoText)
                         Text("図書館をめぐり、本と出会う旅をはじめよう")
@@ -35,7 +35,7 @@ struct OnboardingView: View {
                 Spacer()
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("あなたのお名前を教えてください")
+                    Text("ニックネームを教えてください")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.toshoText)
 
@@ -51,7 +51,7 @@ struct OnboardingView: View {
                             )
                     }
 
-                    Text("マイページに表示されます。あとから変更はできません")
+                    Text("マイページに表示されます。あとから変更できます")
                         .font(.caption)
                         .foregroundColor(.toshoSubtext)
                 }
