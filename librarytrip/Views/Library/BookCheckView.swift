@@ -117,7 +117,8 @@ struct BookCheckView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(titleInput.trimmingCharacters(in: .whitespaces).isEmpty ? Color.gray.opacity(0.4) : Color.toshoGreen)
+                        .background(titleInput.trimmingCharacters(in: .whitespaces).isEmpty
+                                    ? Color.gray.opacity(0.4) : Color.toshoGreen)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 .disabled(titleInput.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -165,12 +166,7 @@ struct BookCheckView: View {
 
     private func bookRow(_ book: BookSearchResult) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "book.closed.fill")
-                .font(.title3)
-                .foregroundColor(.white)
-                .frame(width: 40, height: 40)
-                .background(Color.toshoGreen.opacity(0.8))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            bookCoverView(book, width: 44, height: 60)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(book.title)
@@ -203,12 +199,7 @@ struct BookCheckView: View {
 
     private func selectedBookCard(_ book: BookSearchResult) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "book.closed.fill")
-                .font(.title3)
-                .foregroundColor(.white)
-                .frame(width: 40, height: 40)
-                .background(Color.toshoGreen)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            bookCoverView(book, width: 44, height: 60)
             VStack(alignment: .leading, spacing: 3) {
                 Text(book.title)
                     .font(.subheadline.bold())
@@ -226,6 +217,36 @@ struct BookCheckView: View {
         .background(Color.toshoCard)
         .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
         .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 4, y: 1)
+    }
+
+    @ViewBuilder
+    private func bookCoverView(_ book: BookSearchResult, width: CGFloat, height: CGFloat) -> some View {
+        if let raw = book.coverURL,
+           let url = URL(string: raw.replacingOccurrences(of: "http://", with: "https://")) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    coverPlaceholder
+                }
+            }
+            .frame(width: width, height: height)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        } else {
+            coverPlaceholder
+                .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+    }
+
+    private var coverPlaceholder: some View {
+        ZStack {
+            Color.toshoGreen.opacity(0.8)
+            Image(systemName: "book.closed.fill")
+                .font(.title3)
+                .foregroundColor(.white)
+        }
     }
 
     // MARK: - Result
@@ -389,7 +410,10 @@ struct BookCheckView: View {
     }
 
     private func runCheck(for book: BookSearchResult) async {
-        guard let systemId = library.systemId else { return }
+        guard let systemId = library.systemId else {
+            viewState = .error("この図書館はカーリル蔵書確認に対応していません")
+            return
+        }
         viewState = .checking(book)
         let result = await appState.checkBookAvailability(isbn: book.isbn, systemIds: [systemId])
         if let result {
