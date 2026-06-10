@@ -408,14 +408,14 @@ extension CalilAPIService {
             return []
         }
         return json.compactMap { dict -> BookSearchResult? in
-            guard let isbn = dict["isbn"] as? String,
+            guard let isbn  = dict["isbn"]  as? String,
                   let title = dict["title"] as? String, !title.isEmpty else { return nil }
             return BookSearchResult(
-                isbn: isbn,
-                title: title,
-                author: dict["author"] as? String ?? "",
+                isbn:      isbn,
+                title:     title,
+                author:    dict["author"]    as? String ?? "",
                 publisher: dict["publisher"] as? String ?? "",
-                coverURL: dict["cover"] as? String
+                coverURL:  dict["cover"]     as? String
             )
         }
     }
@@ -436,4 +436,6 @@ extension CalilCheckResponse {
             )
         }
     }
+
 }
+

@@ -413,6 +413,7 @@ class AppState: ObservableObject {
             return nil
         }
     }
+
 }
 
 // MARK: - Curated Ranking Data

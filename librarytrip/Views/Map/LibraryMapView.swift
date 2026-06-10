@@ -470,7 +470,12 @@ struct LibraryMapView: View {
     private func categoryChip(_ category: LibraryCategory) -> some View {
         let isSelected = selectedCategory == category
         return Button {
-            selectedCategory = isSelected ? nil : category
+            let next = isSelected ? nil : category
+            selectedCategory = next
+            // 未検索の状態でカテゴリを選んだら現在地周辺を即時取得する
+            if next != nil && !hasSearched {
+                Task { await searchCurrentArea() }
+            }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: category.icon).font(.caption)
