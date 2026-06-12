@@ -154,7 +154,7 @@ actor CalilAPIService {
     /// 読み取り優先順位:
     /// 1. Info.plist の "CalilAPIKey" エントリ（本番ビルド用: Build Settings → $(CALIL_API_KEY)）
     /// 2. Scheme 環境変数 "CALIL_API_KEY"（開発・デバッグ用）
-    /// 3. どちらも未設定の場合は空文字（APIリクエストが 400 エラーになります）
+    /// 3. どちらも未設定の場合は "test" にフォールバック
     static var appKey: String {
         if let key = Bundle.main.object(forInfoDictionaryKey: "CalilAPIKey") as? String,
            !key.isEmpty, key != "$(CALIL_API_KEY)" {
@@ -164,9 +164,27 @@ actor CalilAPIService {
            !key.isEmpty {
             return key
         }
-        // キーが未設定のままでも開発中は動くよう "test" にフォールバック
         print("[CalilAPI] ⚠️ APIキー未設定。テストキーで代用します。本番前に CALIL_API_KEY を設定してください。")
         return "test"
+    }
+
+    /// Google Books API キー
+    ///
+    /// 読み取り優先順位:
+    /// 1. Info.plist の "GoogleBooksAPIKey" エントリ（本番ビルド用: Build Settings → $(GOOGLE_BOOKS_API_KEY)）
+    /// 2. Scheme 環境変数 "GOOGLE_BOOKS_API_KEY"（開発・デバッグ用）
+    /// 3. どちらも未設定の場合は空文字（レート制限あり）
+    static var googleBooksAPIKey: String {
+        if let key = Bundle.main.object(forInfoDictionaryKey: "GoogleBooksAPIKey") as? String,
+           !key.isEmpty, key != "$(GOOGLE_BOOKS_API_KEY)" {
+            return key
+        }
+        if let key = ProcessInfo.processInfo.environment["GOOGLE_BOOKS_API_KEY"],
+           !key.isEmpty {
+            return key
+        }
+        print("[GoogleBooks] ⚠️ APIキー未設定。GOOGLE_BOOKS_API_KEY を Scheme 環境変数に設定してください。")
+        return ""
     }
 
     private let baseURL = "https://api.calil.jp"
@@ -380,7 +398,7 @@ enum CalilAPIError: LocalizedError {
     }
 }
 
-// MARK: - Book Search (OpenBD)
+// MARK: - Book Search (Google Books)
 
 struct BookSearchResult: Identifiable, Sendable {
     let id = UUID()
@@ -393,29 +411,44 @@ struct BookSearchResult: Identifiable, Sendable {
 
 extension CalilAPIService {
     func searchBooks(title: String) async throws -> [BookSearchResult] {
-        var components = URLComponents(string: "https://api.openbd.jp/v1/search")!
-        components.queryItems = [
-            URLQueryItem(name: "title", value: title),
-            URLQueryItem(name: "limit", value: "20"),
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "q",          value: "intitle:\(title)"),
+            URLQueryItem(name: "maxResults", value: "20"),
         ]
+        let apiKey = Self.googleBooksAPIKey
+        if !apiKey.isEmpty {
+            queryItems.append(URLQueryItem(name: "key", value: apiKey))
+        }
+        var components = URLComponents(string: "https://www.googleapis.com/books/v1/volumes")!
+        components.queryItems = queryItems
         guard let url = components.url else { return [] }
 
         let (data, resp) = try await URLSession.shared.data(from: url)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw CalilAPIError.badStatus((resp as? HTTPURLResponse)?.statusCode ?? -1)
         }
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            return []
-        }
-        return json.compactMap { dict -> BookSearchResult? in
-            guard let isbn  = dict["isbn"]  as? String,
-                  let title = dict["title"] as? String, !title.isEmpty else { return nil }
+        guard let json  = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = json["items"] as? [[String: Any]] else { return [] }
+
+        return items.compactMap { item -> BookSearchResult? in
+            guard let info  = item["volumeInfo"] as? [String: Any],
+                  let title = info["title"] as? String, !title.isEmpty else { return nil }
+
+            // ISBN_13 優先、なければ ISBN_10
+            let ids    = info["industryIdentifiers"] as? [[String: Any]] ?? []
+            let isbn13 = ids.first { $0["type"] as? String == "ISBN_13" }?["identifier"] as? String
+            let isbn10 = ids.first { $0["type"] as? String == "ISBN_10" }?["identifier"] as? String
+            guard let isbn = isbn13 ?? isbn10 else { return nil }
+
+            let authors    = info["authors"] as? [String] ?? []
+            let imageLinks = info["imageLinks"] as? [String: String]
+
             return BookSearchResult(
                 isbn:      isbn,
                 title:     title,
-                author:    dict["author"]    as? String ?? "",
-                publisher: dict["publisher"] as? String ?? "",
-                coverURL:  dict["cover"]     as? String
+                author:    authors.joined(separator: ", "),
+                publisher: info["publisher"] as? String ?? "",
+                coverURL:  imageLinks?["thumbnail"]
             )
         }
     }

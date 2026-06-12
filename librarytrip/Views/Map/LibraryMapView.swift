@@ -32,6 +32,10 @@ struct LibraryMapView: View {
     // 検索済みフラグ（false=ウィッシュリストのみ表示、true=検索結果を表示）
     @State private var hasSearched = false
 
+    // 現在地
+    @State private var locationManager = LocationManager()
+    @State private var hasCenteredOnUser = false
+
     // MARK: - Filtered libraries
 
     var filteredLibraries: [Library] {
@@ -64,6 +68,28 @@ struct LibraryMapView: View {
             }
         }
         .onChange(of: showDetail) { _, new in appState.isPresentingDetailSheet = new }
+        // 最初に現在地が取れたらカメラ移動 + 周辺図書館を自動取得
+        .onChange(of: locationManager.updateCount) { _, _ in
+            guard let coord = locationManager.coordinate, !hasCenteredOnUser else { return }
+            hasCenteredOnUser = true
+            withAnimation(.easeInOut(duration: 0.5)) {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: coord,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                ))
+            }
+            lastFetchedCenter = coord
+            showSearchHereButton = false
+            Task {
+                await appState.fetchNearbyLibraries(
+                    latitude: coord.latitude,
+                    longitude: coord.longitude
+                )
+                if !appState.lastSearchResults.isEmpty {
+                    hasSearched = true
+                }
+            }
+        }
     }
 
     private var centerLoadingOverlay: some View {
@@ -87,6 +113,7 @@ struct LibraryMapView: View {
 
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
+            UserAnnotation()
             ForEach(filteredLibraries) { library in
                 Annotation(library.name, coordinate: library.coordinate) {
                     LibraryMapPin(
@@ -139,6 +166,17 @@ struct LibraryMapView: View {
             if isSearchFocused && !suggestions.isEmpty {
                 suggestionList
                     .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            // 現在地ボタン（右サイド）
+            if !isSearchFocused {
+                HStack {
+                    Spacer()
+                    locationButton
+                        .padding(.trailing, 16)
+                        .padding(.top, 6)
+                }
+                .transition(.opacity)
             }
 
             Spacer()
@@ -489,6 +527,28 @@ struct LibraryMapView: View {
         }
     }
 
+    private var locationButton: some View {
+        Button {
+            locationManager.requestAndLocate()
+            if let coord = locationManager.coordinate {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    cameraPosition = .region(MKCoordinateRegion(
+                        center: coord,
+                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                    ))
+                }
+            }
+        } label: {
+            Image(systemName: locationManager.coordinate != nil ? "location.fill" : "location")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.blue)
+                .frame(width: 40, height: 40)
+                .background(Color.toshoCard)
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+        }
+    }
+
     private func miniFeature(show: Bool, icon: String, label: String) -> some View {
         HStack(spacing: 2) {
             Image(systemName: icon).font(.system(size: 9))
@@ -829,6 +889,54 @@ struct Triangle: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
         path.closeSubpath()
         return path
+    }
+}
+
+// MARK: - Location Manager
+
+@MainActor
+@Observable
+final class LocationManager: NSObject {
+    var coordinate: CLLocationCoordinate2D?
+    var updateCount = 0
+
+    private let clManager = CLLocationManager()
+
+    override init() {
+        super.init()
+        clManager.delegate = self
+        clManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    }
+
+    func requestAndLocate() {
+        switch clManager.authorizationStatus {
+        case .notDetermined:
+            clManager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse, .authorizedAlways:
+            clManager.requestLocation()
+        default:
+            break
+        }
+    }
+}
+
+extension LocationManager: CLLocationManagerDelegate {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let coord = locations.last?.coordinate else { return }
+        Task { @MainActor in
+            self.coordinate = coord
+            self.updateCount += 1
+        }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
+        manager.requestLocation()
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("[Location] \(error.localizedDescription)")
     }
 }
 

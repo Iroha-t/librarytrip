@@ -57,6 +57,11 @@
             value = "1a50332b5206c3f5d1cf407486ae1104"
             isEnabled = "YES">
          </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "GOOGLE_BOOKS_API_KEY"
+            value = "AIzaSyCua-tt4nA8J9RdUUvXz2DU8y7T3nBxIWA"
+            isEnabled = "YES">
+         </EnvironmentVariable>
       </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction

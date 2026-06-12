@@ -44,7 +44,7 @@ struct HomeView: View {
     private var topBar: some View {
         HStack {
             Text("としょたび")
-                .font(.system(size: 22, weight: .bold))
+                .font(.zenMincho(size: 24, weight: .bold))
                 .foregroundColor(.toshoRed)
             Spacer()
             Button {
@@ -71,9 +71,9 @@ struct HomeView: View {
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("今日は どの図書館へ?")
-                .font(.system(size: 36, weight: .black))
+                .font(.zenMincho(size: 34, weight: .black))
                 .foregroundColor(.toshoText)
-                .lineSpacing(4)
+                .lineSpacing(6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -324,7 +324,7 @@ struct HomeView: View {
     private func sectionHeader(title: String, actionLabel: String, onAction: @escaping () -> Void) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 17, weight: .bold))
+                .font(.zenMincho(size: 17, weight: .semiBold))
                 .foregroundColor(.toshoText)
             Spacer()
             Button(action: onAction) {

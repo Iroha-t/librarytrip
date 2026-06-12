@@ -9,6 +9,9 @@ struct LibrarySearchView: View {
     @State private var selectedAxis: RankingAxis = .beautiful
     @State private var selectedLibrary: Library?
 
+    // 図書館名・地名 検索
+    @State private var libraryNameSearchState: LibraryNameSearchState = .idle
+
     // 本タイトル → 近くの図書館検索
     @State private var bookTitle = ""
     @State private var bookSearchState: BookSearchState = .idle
@@ -19,6 +22,13 @@ struct LibrarySearchView: View {
         case study      = "勉強向き"
         case cafe       = "カフェ併設"
         case collection = "蔵書数"
+    }
+
+    enum LibraryNameSearchState {
+        case idle
+        case loading
+        case results([Library])
+        case error(String)
     }
 
     enum BookSearchState {
@@ -42,6 +52,9 @@ struct LibrarySearchView: View {
                 VStack(spacing: 0) {
                     topBar
                     searchBar
+                    if case .idle = libraryNameSearchState { } else {
+                        libraryNameSearchResultArea
+                    }
                     bookLibrarySearchSection
                         .padding(.bottom, 28)
                     rankingSection
@@ -63,7 +76,7 @@ struct LibrarySearchView: View {
     private var topBar: some View {
         HStack {
             Text("図書館を探す")
-                .font(.system(size: 22, weight: .black))
+                .font(.zenMincho(size: 22, weight: .bold))
                 .foregroundColor(.toshoText)
             Spacer()
         }
@@ -77,19 +90,139 @@ struct LibrarySearchView: View {
 
     private var searchBar: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.toshoSubtext)
-            TextField("図書館名・地名で検索", text: $searchText)
-                .font(.subheadline)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.toshoSubtext)
+                TextField("図書館名・地名・都道府県で検索", text: $searchText)
+                    .font(.subheadline)
+                    .submitLabel(.search)
+                    .onSubmit { Task { await searchLibraries() } }
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        libraryNameSearchState = .idle
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.toshoSubtext)
+                            .font(.system(size: 14))
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            .background(Color.toshoCard)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.07), radius: 12, y: 3)
+
+            if !searchText.isEmpty {
+                Button { Task { await searchLibraries() } } label: {
+                    Text("検索")
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                        .background(Color.toshoRed)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-        .background(Color.toshoCard)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.07), radius: 12, y: 3)
         .padding(.horizontal, 20)
-        .padding(.bottom, 20)
+        .padding(.bottom, 16)
+    }
+
+    // MARK: - Library Name Search Result Area
+
+    @ViewBuilder
+    private var libraryNameSearchResultArea: some View {
+        switch libraryNameSearchState {
+        case .idle:
+            EmptyView()
+
+        case .loading:
+            HStack(spacing: 10) {
+                ProgressView().scaleEffect(0.9).tint(.toshoRed)
+                Text("図書館を検索中...")
+                    .font(.subheadline)
+                    .foregroundColor(.toshoSubtext)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(20)
+            .background(Color.toshoCard)
+            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+            .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+
+        case .results(let libs):
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text(libs.isEmpty ? "該当する図書館が見つかりませんでした" : "検索結果 \(libs.count)件")
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, libs.isEmpty ? 12 : 4)
+
+                if libs.isEmpty {
+                    VStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.title3)
+                            .foregroundColor(.toshoSubtext)
+                        Text("都道府県名や市区町村名も試してみてください")
+                            .font(.caption)
+                            .foregroundColor(.toshoSubtext)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 20)
+                } else {
+                    ForEach(Array(libs.prefix(30).enumerated()), id: \.element.id) { idx, lib in
+                        Button { selectedLibrary = lib } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(lib.name)
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(.toshoText)
+                                        .lineLimit(1)
+                                    Text("\(lib.prefecture) \(lib.city)")
+                                        .font(.caption)
+                                        .foregroundColor(.toshoSubtext)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.toshoSubtext)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        if idx < min(29, libs.count - 1) {
+                            Divider().padding(.leading, 16)
+                        }
+                    }
+                }
+            }
+            .background(Color.toshoCard)
+            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius, style: .continuous))
+            .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
+
+        case .error(let msg):
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                Text(msg).font(.subheadline).foregroundColor(.toshoText)
+            }
+            .padding(14)
+            .background(Color.orange.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+        }
     }
 
     // MARK: - Book Library Search Section
@@ -100,7 +233,7 @@ struct LibrarySearchView: View {
                 Image(systemName: "book.closed.fill")
                     .foregroundColor(.toshoRed)
                 Text("本のタイトルで近くの図書館を探す")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.zenMincho(size: 17, weight: .semiBold))
                     .foregroundColor(.toshoText)
             }
             .padding(.horizontal, 20)
@@ -272,7 +405,7 @@ struct LibrarySearchView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("図書館ランキング")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.zenMincho(size: 17, weight: .semiBold))
                     .foregroundColor(.toshoText)
                 Spacer()
             }
@@ -407,7 +540,8 @@ struct LibrarySearchView: View {
                     switch loanStatus {
                     case "貸出可":
                         bestStatus = "貸出可"
-                    case "蔵書あり", "館内のみ" where bestStatus != "貸出可":
+                    case "蔵書あり" where bestStatus != "貸出可",
+                         "館内のみ" where bestStatus != "貸出可":
                         bestStatus = "蔵書あり"
                     case "貸出中" where bestStatus == "蔵書なし":
                         bestStatus = "貸出中"
@@ -429,6 +563,92 @@ struct LibrarySearchView: View {
         let order = ["貸出可": 0, "蔵書あり": 1, "館内のみ": 1, "貸出中": 2]
         results.sort { (order[$0.status] ?? 3) < (order[$1.status] ?? 3) }
         bookSearchState = .results(results)
+    }
+
+    // MARK: - Library Search Logic
+
+    private static let prefectures: [String] = [
+        "北海道",
+        "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+        "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+        "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県",
+        "岐阜県", "静岡県", "愛知県", "三重県",
+        "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県",
+        "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+        "徳島県", "香川県", "愛媛県", "高知県",
+        "福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+    ]
+
+    private func extractPrefecture(from query: String) -> String? {
+        // フル名前方一致（"東京都" "東京都港区" など）
+        if let p = Self.prefectures.first(where: { query == $0 || query.hasPrefix($0) }) { return p }
+        // 末尾サフィックスなし（"東京" → "東京都"）
+        for p in Self.prefectures where p != "北海道" {
+            let short = String(p.dropLast())
+            if query == short || query.hasPrefix(short) { return p }
+        }
+        // 含む検索（"石川県立図書館" など名称中に都道府県が入る場合）
+        return Self.prefectures.first { query.contains($0) }
+    }
+
+    private func extractCity(from query: String, pref: String) -> String? {
+        var q = query
+        if q.hasPrefix(pref) {
+            q = String(q.dropFirst(pref.count)).trimmingCharacters(in: .whitespaces)
+        } else if pref != "北海道" {
+            let short = String(pref.dropLast())
+            if q.hasPrefix(short) { q = String(q.dropFirst(short.count)).trimmingCharacters(in: .whitespaces) }
+        }
+        // 残余が市区町村を含む場合のみ city パラメータとして使う
+        let hasCityHint = q.contains("市") || q.contains("区") || q.contains("町") || q.contains("村") || q.contains("郡")
+        return (hasCityHint && !q.isEmpty) ? q : nil
+    }
+
+    private func searchLibraries() async {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { libraryNameSearchState = .idle; return }
+        libraryNameSearchState = .loading
+
+        // ローカルキャッシュを先にフィルタ
+        let local = appState.allLibraries.filter {
+            $0.name.localizedStandardContains(query) ||
+            $0.city.localizedStandardContains(query) ||
+            $0.prefecture.localizedStandardContains(query)
+        }
+
+        guard let pref = extractPrefecture(from: query) else {
+            // 都道府県を検出できない場合はローカル結果のみ
+            libraryNameSearchState = .results(local)
+            return
+        }
+
+        // 都道府県のみ指定の場合は city を渡さない（全件取得）
+        let isPrefOnlyQuery = (query == pref || (pref != "北海道" && query == String(pref.dropLast())))
+        let cityHint = isPrefOnlyQuery ? nil : extractCity(from: query, pref: pref)
+
+        await appState.fetchLibraries(pref: pref, city: cityHint)
+        let apiResults = appState.lastSearchResults
+
+        // 都道府県のみ検索 → 全件、それ以外 → クエリでさらに絞り込む
+        let filtered: [Library]
+        if isPrefOnlyQuery {
+            filtered = apiResults
+        } else {
+            filtered = apiResults.filter {
+                $0.name.localizedStandardContains(query) ||
+                $0.city.localizedStandardContains(query) ||
+                $0.address.localizedStandardContains(query)
+            }
+        }
+
+        // ローカル + API を libId で重複排除して結合
+        var seen = Set<String>()
+        var combined: [Library] = []
+        for lib in (filtered + local) {
+            let key = lib.libId ?? "\(lib.name)_\(lib.city)"
+            if seen.insert(key).inserted { combined.append(lib) }
+        }
+        libraryNameSearchState = .results(combined)
     }
 
     // MARK: - Helpers

@@ -13,18 +13,35 @@ extension Color {
     static let toshoAmber = Color(red: 0.900, green: 0.680, blue: 0.180)
     static let toshoAmberLight = Color(red: 0.900, green: 0.680, blue: 0.180).opacity(0.15)
 
-    // Background — warm off-white
-    static let toshoCream = Color(red: 0.972, green: 0.960, blue: 0.945)
+    // Background — ライトモード: ウォームオフホワイト / ダークモード: ダークグレー
+    static let toshoCream = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark
+            ? UIColor(red: 0.11, green: 0.11, blue: 0.13, alpha: 1)
+            : UIColor(red: 0.972, green: 0.960, blue: 0.945, alpha: 1)
+    })
 
     // Legacy
     static let toshoBrown = Color(red: 0.545, green: 0.369, blue: 0.235)
 
-    // Text
-    static let toshoText = Color(red: 0.098, green: 0.098, blue: 0.118)
-    static let toshoSubtext = Color(red: 0.098, green: 0.098, blue: 0.118).opacity(0.42)
+    // Text — ライトモード: ほぼ黒 / ダークモード: ほぼ白
+    static let toshoText = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark
+            ? UIColor(red: 0.94, green: 0.94, blue: 0.96, alpha: 1)
+            : UIColor(red: 0.098, green: 0.098, blue: 0.118, alpha: 1)
+    })
 
-    // Cards
-    static let toshoCard = Color.white
+    static let toshoSubtext = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark
+            ? UIColor(red: 0.94, green: 0.94, blue: 0.96, alpha: 0.50)
+            : UIColor(red: 0.098, green: 0.098, blue: 0.118, alpha: 0.42)
+    })
+
+    // Cards — ライトモード: 白 / ダークモード: 少し明るいダーク面
+    static let toshoCard = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark
+            ? UIColor(red: 0.17, green: 0.17, blue: 0.19, alpha: 1)
+            : UIColor.white
+    })
 }
 
 extension LibraryCategory {

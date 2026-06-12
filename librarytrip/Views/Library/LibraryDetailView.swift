@@ -167,7 +167,7 @@ struct LibraryDetailView: View {
                 }
 
                 Text(library.name)
-                    .font(.title2.bold())
+                    .font(.zenMincho(size: 22, weight: .bold))
                     .foregroundColor(.white)
 
                 HStack(spacing: 4) {
