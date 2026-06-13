@@ -22,6 +22,14 @@ class AppState: ObservableObject {
     private var isFetchingAll = false
 
     private var visitedStableKeys: Set<String> = []
+    private var wishlistStableKeys: Set<String> = []
+    private let wishlistDefaultsKey = "librarytrip_wishlist_stable_keys"
+
+    init() {
+        let saved = UserDefaults.standard.stringArray(forKey: wishlistDefaultsKey) ?? []
+        wishlistStableKeys = Set(saved)
+        syncWishlistIds()
+    }
 
     private var deviceId: String {
         if let id = UserDefaults.standard.string(forKey: "librarytrip_device_id") { return id }
@@ -120,11 +128,15 @@ class AppState: ObservableObject {
     }
 
     func toggleWishlist(_ library: Library) {
+        let key = stableKey(for: library)
         if wishlistLibraryIds.contains(library.id) {
             wishlistLibraryIds.remove(library.id)
+            wishlistStableKeys.remove(key)
         } else {
             wishlistLibraryIds.insert(library.id)
+            wishlistStableKeys.insert(key)
         }
+        UserDefaults.standard.set(Array(wishlistStableKeys), forKey: wishlistDefaultsKey)
     }
 
     // MARK: - Supabase: 起動時読み込み
@@ -162,6 +174,13 @@ class AppState: ObservableObject {
             .filter { visitedStableKeys.contains(stableKey(for: $0)) }
             .map { $0.id }
         visitedLibraryIds = Set(matched)
+    }
+
+    private func syncWishlistIds() {
+        let matched = allLibraries
+            .filter { wishlistStableKeys.contains(stableKey(for: $0)) }
+            .map { $0.id }
+        wishlistLibraryIds = Set(matched)
     }
 
     // MARK: - Supabase: レビュー保存
@@ -396,6 +415,7 @@ class AppState: ObservableObject {
         }
         apiLibraries = Array(byLibId.values)
         syncVisitedIds()
+        syncWishlistIds()
         print("[AppState] merge: \(before)件 → \(apiLibraries.count)件 (新規\(newLibraries.count)件追加)")
     }
 

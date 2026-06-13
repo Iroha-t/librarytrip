@@ -16,9 +16,22 @@
 		6AB24CBA2FD2CA3200A2809D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		6AF464A42FDDB4E20029301F /* Exceptions for "librarytrip" folder in "librarytrip" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 6A62CAA32FC75AA20049887F /* librarytrip */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		6A62CAA62FC75AA20049887F /* librarytrip */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6AF464A42FDDB4E20029301F /* Exceptions for "librarytrip" folder in "librarytrip" target */,
+			);
 			path = librarytrip;
 			sourceTree = "<group>";
 		};
@@ -265,11 +278,13 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2K446D59RQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				GOOGLE_BOOKS_API_KEY = "AIzaSyCua-tt4nA8J9RdUUvXz2DU8y7T3nBxIWA\n";
+				INFOPLIST_FILE = librarytrip/Info.plist;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "図書館の周辺検索と現在地表示に使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -280,7 +295,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
+				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = app.takeuchi.iroiro.librarytrip.lit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -303,11 +319,13 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2K446D59RQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				GOOGLE_BOOKS_API_KEY = "AIzaSyCua-tt4nA8J9RdUUvXz2DU8y7T3nBxIWA\n";
+				INFOPLIST_FILE = librarytrip/Info.plist;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "図書館の周辺検索と現在地表示に使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -318,7 +336,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
+				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = app.takeuchi.iroiro.librarytrip.lit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

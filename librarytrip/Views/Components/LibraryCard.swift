@@ -81,6 +81,9 @@ struct LibraryCard: View {
             VStack(alignment: .leading, spacing: 9) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
+                        if let category = library.category {
+                            CategoryChip(category: category)
+                        }
                         ForEach(library.tags.prefix(3), id: \.rawValue) { tag in
                             TagChip(tag: tag)
                         }
@@ -260,6 +263,30 @@ struct TagChip: View {
         .overlay(
             Capsule()
                 .strokeBorder(Color.toshoGreen.opacity(0.22), lineWidth: 0.5)
+        )
+    }
+}
+
+// MARK: - Category Chip
+
+struct CategoryChip: View {
+    let category: LibraryCategory
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: category.icon)
+                .font(.system(size: 9, weight: .semibold))
+            Text(category.label)
+                .font(.system(size: 10, weight: .medium))
+        }
+        .foregroundColor(category.color)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(category.color.opacity(0.10))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(category.color.opacity(0.28), lineWidth: 0.5)
         )
     }
 }

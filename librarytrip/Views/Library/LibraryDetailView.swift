@@ -107,7 +107,7 @@ struct LibraryDetailView: View {
                     Text("この図書館の蔵書を確認")
                         .font(.subheadline.bold())
                         .foregroundColor(.toshoText)
-                    Text("ISBNを入力して貸出状況をチェック")
+                    Text("タイトルで検索して貸出状況をチェック")
                         .font(.caption)
                         .foregroundColor(.toshoSubtext)
                 }
@@ -268,6 +268,9 @@ struct LibraryDetailView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
+                    if let category = library.category {
+                        CategoryChip(category: category)
+                    }
                     ForEach(library.tags, id: \.rawValue) { tag in
                         TagChip(tag: tag)
                     }

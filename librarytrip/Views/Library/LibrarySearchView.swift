@@ -16,6 +16,9 @@ struct LibrarySearchView: View {
     @State private var bookTitle = ""
     @State private var bookSearchState: BookSearchState = .idle
     @State private var locationManager = LocationManager()
+    @State private var selectedPrefecture: String? = nil
+    @State private var showPrefecturePicker = false
+    @State private var bookCandidatesCache: [BookSearchResult] = []
 
     enum RankingAxis: String, CaseIterable {
         case beautiful  = "建築"
@@ -33,8 +36,10 @@ struct LibrarySearchView: View {
 
     enum BookSearchState {
         case idle
-        case loading
-        case results([LibraryBookResult])
+        case searchingBooks                          // タイトル検索中
+        case bookCandidates([BookSearchResult])      // 本の候補一覧
+        case checkingLibraries(BookSearchResult)     // 図書館を問い合わせ中
+        case results([LibraryBookResult])            // 図書館の蔵書結果
         case error(String)
     }
 
@@ -67,6 +72,9 @@ struct LibrarySearchView: View {
         .sheet(item: $selectedLibrary) { lib in
             LibraryDetailView(library: lib)
                 .environmentObject(appState)
+        }
+        .sheet(isPresented: $showPrefecturePicker) {
+            PrefecturePickerSheet(selected: $selectedPrefecture)
         }
         .onChange(of: selectedLibrary) { _, new in appState.isPresentingDetailSheet = new != nil }
     }
@@ -247,7 +255,7 @@ struct LibrarySearchView: View {
                     TextField("例: 吾輩は猫である", text: $bookTitle)
                         .font(.subheadline)
                         .submitLabel(.search)
-                        .onSubmit { Task { await searchBooksInNearbyLibraries() } }
+                        .onSubmit { Task { await runBookSearch() } }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
@@ -257,7 +265,7 @@ struct LibrarySearchView: View {
                     .stroke(Color.toshoRed.opacity(0.3), lineWidth: 1))
 
                 Button {
-                    Task { await searchBooksInNearbyLibraries() }
+                    Task { await runBookSearch() }
                 } label: {
                     Text("検索")
                         .font(.subheadline.bold())
@@ -272,30 +280,80 @@ struct LibrarySearchView: View {
             }
             .padding(.horizontal, 20)
 
-            // 現在地ヒント
-            HStack(spacing: 4) {
-                Image(systemName: locationManager.coordinate != nil ? "location.fill" : "location")
-                    .font(.caption2)
-                    .foregroundColor(locationManager.coordinate != nil ? .blue : .toshoSubtext)
-                Text(locationManager.coordinate != nil ? "現在地周辺で検索します" : "現在地ボタンで位置情報を有効にすると精度が上がります")
-                    .font(.caption)
-                    .foregroundColor(.toshoSubtext)
-                Spacer()
-                if locationManager.coordinate == nil {
-                    Button {
-                        locationManager.requestAndLocate()
-                    } label: {
-                        Text("現在地を使う")
-                            .font(.caption.bold())
-                            .foregroundColor(.blue)
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
+            // 検索エリア選択行
+            areaPickerRow
 
             // 結果エリア
             bookSearchResultArea
         }
+    }
+
+    // MARK: - Area Picker Row
+
+    private var areaPickerRow: some View {
+        HStack(spacing: 8) {
+            if let pref = selectedPrefecture {
+                // 都道府県 選択済み
+                HStack(spacing: 5) {
+                    Image(systemName: "map.fill")
+                        .font(.caption2)
+                        .foregroundColor(.toshoRed)
+                    Text(pref)
+                        .font(.caption.bold())
+                        .foregroundColor(.toshoRed)
+                    Button {
+                        selectedPrefecture = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.toshoRed.opacity(0.6))
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.toshoRed.opacity(0.10))
+                .clipShape(Capsule())
+
+                Spacer()
+
+                Button("変更") { showPrefecturePicker = true }
+                    .font(.caption.bold())
+                    .foregroundColor(.toshoRed)
+
+            } else if locationManager.coordinate != nil {
+                // 現在地あり
+                Image(systemName: "location.fill")
+                    .font(.caption2)
+                    .foregroundColor(.blue)
+                Text("現在地周辺で検索")
+                    .font(.caption)
+                    .foregroundColor(.toshoSubtext)
+                Spacer()
+                Button("都道府県を指定") { showPrefecturePicker = true }
+                    .font(.caption.bold())
+                    .foregroundColor(.toshoRed)
+
+            } else {
+                // 現在地なし・都道府県未選択
+                Image(systemName: "location.slash")
+                    .font(.caption2)
+                    .foregroundColor(.toshoSubtext)
+                Text("場所を指定してください")
+                    .font(.caption)
+                    .foregroundColor(.toshoSubtext)
+                Spacer()
+                Button("現在地") { locationManager.requestAndLocate() }
+                    .font(.caption.bold())
+                    .foregroundColor(.blue)
+                Text("/")
+                    .font(.caption)
+                    .foregroundColor(.toshoSubtext)
+                Button("都道府県") { showPrefecturePicker = true }
+                    .font(.caption.bold())
+                    .foregroundColor(.toshoRed)
+            }
+        }
+        .padding(.horizontal, 20)
     }
 
     @ViewBuilder
@@ -304,72 +362,139 @@ struct LibrarySearchView: View {
         case .idle:
             EmptyView()
 
-        case .loading:
-            HStack(spacing: 10) {
-                ProgressView().scaleEffect(0.9).tint(.toshoRed)
-                Text("図書館を検索中...")
-                    .font(.subheadline)
-                    .foregroundColor(.toshoSubtext)
+        case .searchingBooks:
+            bookLoadingCard("本を検索中...")
+
+        case .bookCandidates(let books):
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(books.isEmpty ? "本が見つかりませんでした" : "本を選んでください（\(books.count)件）")
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+
+                if books.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.title2)
+                            .foregroundColor(.toshoSubtext)
+                        Text("タイトルを変えて検索してみてください")
+                            .font(.caption)
+                            .foregroundColor(.toshoSubtext)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(24)
+                    .background(Color.toshoCard)
+                    .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+                    .padding(.horizontal, 20)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(books) { book in
+                            Button {
+                                Task { await runLibrarySearch(for: book) }
+                            } label: {
+                                bookCandidateRow(book)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 20)
+                        }
+                    }
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(20)
-            .background(Color.toshoCard)
-            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
-            .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
+
+        case .checkingLibraries(let book):
+            VStack(spacing: 10) {
+                selectedBookBanner(book)
+                bookLoadingCard("図書館を検索中...\nしばらくお待ちください")
+            }
             .padding(.horizontal, 20)
 
         case .results(let items):
             VStack(spacing: 0) {
+                // 選択中の本バナー（非表示にならないよう保持）
+                if case .results = bookSearchState,
+                   let book = bookCandidatesCache.first {
+                    HStack(spacing: 10) {
+                        bookCoverThumb(book)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(book.title).font(.caption.bold()).foregroundColor(.toshoText).lineLimit(1)
+                            Text(book.author).font(.caption2).foregroundColor(.toshoSubtext).lineLimit(1)
+                        }
+                        Spacer()
+                        Button {
+                            bookSearchState = .bookCandidates(bookCandidatesCache)
+                        } label: {
+                            Text("別の本を選ぶ")
+                                .font(.caption.bold())
+                                .foregroundColor(.toshoRed)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.toshoRedLight)
+                    .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.smallCornerRadius))
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 6)
+                }
+
                 if items.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
                             .font(.title2)
                             .foregroundColor(.toshoSubtext)
-                        Text("近くの図書館に蔵書が見つかりませんでした")
+                        Text("この本の蔵書が見つかりませんでした")
                             .font(.subheadline)
                             .foregroundColor(.toshoSubtext)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(28)
+                    .background(Color.toshoCard)
+                    .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+                    .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
+                    .padding(.horizontal, 20)
                 } else {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
-                        Button { selectedLibrary = item.library } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(item.library.name)
-                                        .font(.subheadline.bold())
-                                        .foregroundColor(.toshoText)
-                                        .lineLimit(1)
-                                    Text("\(item.library.prefecture) \(item.library.city)")
-                                        .font(.caption)
-                                        .foregroundColor(.toshoSubtext)
-                                }
-                                Spacer()
-                                loanBadge(item.status)
-                                if let url = item.reserveURL, let u = URL(string: url) {
-                                    Link(destination: u) {
-                                        Image(systemName: "arrow.up.right")
+                    VStack(spacing: 0) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
+                            Button { selectedLibrary = item.library } label: {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.library.name)
+                                            .font(.subheadline.bold())
+                                            .foregroundColor(.toshoText)
+                                            .lineLimit(1)
+                                        Text("\(item.library.prefecture) \(item.library.city)")
                                             .font(.caption)
-                                            .foregroundColor(.toshoRed)
+                                            .foregroundColor(.toshoSubtext)
                                     }
-                                    .buttonStyle(.plain)
+                                    Spacer()
+                                    loanBadge(item.status)
+                                    if let url = item.reserveURL, let u = URL(string: url) {
+                                        Link(destination: u) {
+                                            Image(systemName: "arrow.up.right")
+                                                .font(.caption)
+                                                .foregroundColor(.toshoRed)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                        }
-                        .buttonStyle(.plain)
-                        if idx < items.count - 1 {
-                            Divider().padding(.leading, 16)
+                            .buttonStyle(.plain)
+                            if idx < items.count - 1 {
+                                Divider().padding(.leading, 16)
+                            }
                         }
                     }
+                    .background(Color.toshoCard)
+                    .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+                    .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
+                    .padding(.horizontal, 20)
                 }
             }
-            .background(Color.toshoCard)
-            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
-            .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
-            .padding(.horizontal, 20)
 
         case .error(let msg):
             HStack(spacing: 10) {
@@ -381,6 +506,100 @@ struct LibrarySearchView: View {
             .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
             .padding(.horizontal, 20)
         }
+    }
+
+    // 本候補の行
+    private func bookCandidateRow(_ book: BookSearchResult) -> some View {
+        HStack(spacing: 12) {
+            bookCoverThumb(book)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(book.title)
+                    .font(.subheadline.bold())
+                    .foregroundColor(.toshoText)
+                    .lineLimit(2)
+                if !book.author.isEmpty {
+                    Text(book.author)
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
+                        .lineLimit(1)
+                }
+                if !book.publisher.isEmpty {
+                    Text(book.publisher)
+                        .font(.caption2)
+                        .foregroundColor(.toshoSubtext.opacity(0.7))
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.toshoSubtext)
+        }
+        .padding(12)
+        .background(Color.toshoCard)
+        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+        .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 4, y: 1)
+    }
+
+    // 選択した本のバナー（checkingLibraries 状態）
+    private func selectedBookBanner(_ book: BookSearchResult) -> some View {
+        HStack(spacing: 10) {
+            bookCoverThumb(book)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(book.title).font(.caption.bold()).foregroundColor(.toshoText).lineLimit(1)
+                Text(book.author).font(.caption2).foregroundColor(.toshoSubtext).lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(10)
+        .background(Color.toshoCard)
+        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.smallCornerRadius))
+    }
+
+    // 小さい表紙サムネイル
+    @ViewBuilder
+    private func bookCoverThumb(_ book: BookSearchResult) -> some View {
+        if let raw = book.coverURL,
+           let url = URL(string: raw.replacingOccurrences(of: "http://", with: "https://")) {
+            AsyncImage(url: url) { phase in
+                if case .success(let img) = phase {
+                    img.resizable().scaledToFill()
+                } else {
+                    bookCoverPlaceholder
+                }
+            }
+            .frame(width: 36, height: 48)
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+        } else {
+            bookCoverPlaceholder
+                .frame(width: 36, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+        }
+    }
+
+    private var bookCoverPlaceholder: some View {
+        ZStack {
+            Color.toshoRed.opacity(0.75)
+            Image(systemName: "book.closed.fill")
+                .font(.footnote)
+                .foregroundColor(.white)
+        }
+    }
+
+    private func bookLoadingCard(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            ProgressView().scaleEffect(0.9).tint(.toshoRed)
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.toshoSubtext)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .background(Color.toshoCard)
+        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+        .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
+        .padding(.horizontal, 20)
     }
 
     private func loanBadge(_ status: String) -> some View {
@@ -478,38 +697,42 @@ struct LibrarySearchView: View {
         }
     }
 
-    // MARK: - Search Logic
+    // MARK: - Book Search Logic
 
-    private func searchBooksInNearbyLibraries() async {
+    // Step 1: タイトルで本を検索して候補一覧を表示
+    private func runBookSearch() async {
         let query = bookTitle.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return }
-        bookSearchState = .loading
-
-        // Step 1: 書籍検索 → ISBNリスト
-        let books: [BookSearchResult]
+        bookSearchState = .searchingBooks
         do {
-            books = try await CalilAPIService.shared.searchBooks(title: query)
+            let books = try await CalilAPIService.shared.searchBooks(title: query)
+            bookCandidatesCache = books
+            bookSearchState = .bookCandidates(books)
         } catch {
             bookSearchState = .error("書籍の検索に失敗しました: \(error.localizedDescription)")
-            return
         }
-        guard !books.isEmpty else {
-            bookSearchState = .error("「\(query)」に一致する本が見つかりませんでした")
-            return
-        }
-        let isbns = Array(books.prefix(5).map(\.isbn))
+    }
 
-        // Step 2: 近くの図書館を取得
-        if let coord = locationManager.coordinate {
+    // Step 2: 選んだ本で図書館を検索
+    private func runLibrarySearch(for book: BookSearchResult) async {
+        bookSearchState = .checkingLibraries(book)
+
+        // 近くの図書館を取得（都道府県 or 現在地）
+        if let pref = selectedPrefecture {
+            await appState.fetchLibraries(pref: pref)
+        } else if let coord = locationManager.coordinate {
             await appState.fetchNearbyLibraries(latitude: coord.latitude, longitude: coord.longitude)
+        } else {
+            bookSearchState = .error("現在地または都道府県を選択してから検索してください")
+            return
         }
         let nearbyLibs = appState.lastSearchResults.filter { $0.systemId != nil }
         guard !nearbyLibs.isEmpty else {
-            bookSearchState = .error("近くの図書館が見つかりません。マップタブで周辺検索か、現在地を有効にしてください")
+            bookSearchState = .error("図書館が見つかりませんでした。別の都道府県を試してみてください")
             return
         }
 
-        // Step 3: systemIdで重複排除し、代表ライブラリをマッピング
+        // systemId で重複排除
         var systemRepresentative: [String: Library] = [:]
         for lib in nearbyLibs {
             guard let sid = lib.systemId, systemRepresentative[sid] == nil else { continue }
@@ -517,39 +740,36 @@ struct LibrarySearchView: View {
         }
         let uniqueSystemIds = Array(systemRepresentative.keys.prefix(10))
 
-        // Step 4: Calil 蔵書確認
+        // Calil 蔵書確認
         let response: CalilCheckResponse
         do {
-            response = try await CalilAPIService.shared.checkBooks(isbns: isbns, systemIds: uniqueSystemIds)
+            response = try await CalilAPIService.shared.checkBooks(isbns: [book.isbn], systemIds: uniqueSystemIds)
         } catch {
             bookSearchState = .error("図書館への問い合わせに失敗しました: \(error.localizedDescription)")
             return
         }
 
-        // Step 5: 結果をライブラリにマッピング
+        // 結果をマッピング
         var results: [LibraryBookResult] = []
         for systemId in uniqueSystemIds {
             guard let lib = systemRepresentative[systemId] else { continue }
             var bestStatus = "蔵書なし"
             var reserveURL: String? = nil
 
-            for isbn in isbns {
-                guard let sysStatus = response.books[isbn]?[systemId] else { continue }
-                if reserveURL == nil { reserveURL = sysStatus.reserveurl }
-                for loanStatus in (sysStatus.libkey ?? [:]).values {
-                    switch loanStatus {
-                    case "貸出可":
-                        bestStatus = "貸出可"
-                    case "蔵書あり" where bestStatus != "貸出可",
-                         "館内のみ" where bestStatus != "貸出可":
-                        bestStatus = "蔵書あり"
-                    case "貸出中" where bestStatus == "蔵書なし":
-                        bestStatus = "貸出中"
-                    default:
-                        break
-                    }
+            guard let sysStatus = response.books[book.isbn]?[systemId] else { continue }
+            if reserveURL == nil { reserveURL = sysStatus.reserveurl }
+            for loanStatus in (sysStatus.libkey ?? [:]).values {
+                switch loanStatus {
+                case "貸出可":
+                    bestStatus = "貸出可"
+                case "蔵書あり" where bestStatus != "貸出可",
+                     "館内のみ" where bestStatus != "貸出可":
+                    bestStatus = "蔵書あり"
+                case "貸出中" where bestStatus == "蔵書なし":
+                    bestStatus = "貸出中"
+                default:
+                    break
                 }
-                if bestStatus == "貸出可" { break }
             }
             if bestStatus != "蔵書なし" {
                 results.append(LibraryBookResult(
@@ -559,7 +779,6 @@ struct LibrarySearchView: View {
             }
         }
 
-        // 貸出可 → 蔵書あり → 貸出中 の順にソート
         let order = ["貸出可": 0, "蔵書あり": 1, "館内のみ": 1, "貸出中": 2]
         results.sort { (order[$0.status] ?? 3) < (order[$1.status] ?? 3) }
         bookSearchState = .results(results)
@@ -684,6 +903,58 @@ struct LibrarySearchView: View {
         case 2: return Color(red: 0.66, green: 0.66, blue: 0.70)
         case 3: return Color(red: 0.76, green: 0.49, blue: 0.25)
         default: return Color.gray.opacity(0.10)
+        }
+    }
+}
+
+// MARK: - Prefecture Picker Sheet
+
+private struct PrefecturePickerSheet: View {
+    @Binding var selected: String?
+    @Environment(\.dismiss) private var dismiss
+
+    private let regions: [(name: String, prefectures: [String])] = [
+        ("北海道・東北", ["北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県"]),
+        ("関東",         ["茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県"]),
+        ("中部",         ["新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県"]),
+        ("近畿",         ["三重県", "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県"]),
+        ("中国・四国",   ["鳥取県", "島根県", "岡山県", "広島県", "山口県", "徳島県", "香川県", "愛媛県", "高知県"]),
+        ("九州・沖縄",   ["福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"]),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(regions, id: \.name) { region in
+                    Section(region.name) {
+                        ForEach(region.prefectures, id: \.self) { pref in
+                            Button {
+                                selected = pref
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(pref)
+                                        .foregroundColor(.toshoText)
+                                    Spacer()
+                                    if selected == pref {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.toshoRed)
+                                            .font(.footnote.bold())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("都道府県を選ぶ")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("閉じる") { dismiss() }
+                        .foregroundColor(.toshoRed)
+                }
+            }
         }
     }
 }
