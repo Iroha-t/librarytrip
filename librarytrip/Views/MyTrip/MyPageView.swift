@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct MyPageView: View {
     @EnvironmentObject var appState: AppState
@@ -9,6 +10,8 @@ struct MyPageView: View {
     @State private var showBookRecords = false
     @State private var showEditNickname = false
     @State private var nicknameInput = ""
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var avatarImage: UIImage?
 
     private var readCount: Int {
         appState.books.filter { $0.status == .read }.count
@@ -54,13 +57,33 @@ struct MyPageView: View {
 
     private var profileHeader: some View {
         VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color.toshoRed.opacity(0.10))
-                    .frame(width: 76, height: 76)
-                Image(systemName: "person.fill")
-                    .font(.system(size: 32))
-                    .foregroundColor(.toshoRed)
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                ZStack(alignment: .bottomTrailing) {
+                    if let image = avatarImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 76, height: 76)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(Color.toshoRed.opacity(0.10))
+                            .frame(width: 76, height: 76)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.toshoRed)
+                            )
+                    }
+                    // カメラバッジ
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 24, height: 24)
+                        .background(Color.toshoRed)
+                        .clipShape(Circle())
+                        .shadow(radius: 2)
+                }
             }
             HStack(spacing: 6) {
                 Text("\(username)さん")
@@ -78,6 +101,20 @@ struct MyPageView: View {
             Text("図書館をめぐって、本と出会おう")
                 .font(.system(size: 12))
                 .foregroundColor(.toshoSubtext)
+        }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            Task {
+                guard let data = try? await newItem?.loadTransferable(type: Data.self),
+                      let original = UIImage(data: data),
+                      let compressed = original.jpegData(compressionQuality: 0.7) else { return }
+                avatarImage = UIImage(data: compressed)
+                UserDefaults.standard.set(compressed, forKey: "avatar_image")
+            }
+        }
+        .onAppear {
+            if let data = UserDefaults.standard.data(forKey: "avatar_image") {
+                avatarImage = UIImage(data: data)
+            }
         }
         .alert("ニックネームを変更", isPresented: $showEditNickname) {
             TextField("ニックネーム", text: $nicknameInput)

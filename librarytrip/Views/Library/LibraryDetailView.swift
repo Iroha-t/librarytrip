@@ -27,6 +27,7 @@ struct LibraryDetailView: View {
                     if library.systemId != nil {
                         bookCheckBanner
                     }
+                    websiteButton
                     mapPreviewSection
                     reviewsSection
                 }
@@ -125,6 +126,49 @@ struct LibraryDetailView: View {
         }
     }
 
+    // MARK: - 公式サイトボタン
+
+    private var websiteButton: some View {
+        let officialURL: URL? = library.urlPC.flatMap { URL(string: $0) }
+        let fallbackURL: URL? = {
+            let q = library.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            return URL(string: "https://www.google.com/search?q=\(q)+図書館")
+        }()
+        let targetURL = officialURL ?? fallbackURL
+        let isOfficial = officialURL != nil
+
+        return Button {
+            if let url = targetURL { openURL(url) }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "globe")
+                    .font(.title2)
+                    .foregroundColor(.toshoGreen)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("公式サイト")
+                        .font(.subheadline.bold())
+                        .foregroundColor(.toshoText)
+                    Text(isOfficial
+                         ? (officialURL?.host ?? "公式ページを開く")
+                         : "「\(library.name)」をGoogleで検索")
+                        .font(.caption)
+                        .foregroundColor(.toshoSubtext)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption)
+                    .foregroundColor(.toshoSubtext)
+            }
+            .padding(16)
+            .background(Color.toshoCard)
+            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+            .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 6, y: 2)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+    }
+
     private var heroSection: some View {
         ZStack(alignment: .bottomLeading) {
             LinearGradient(
@@ -210,32 +254,6 @@ struct LibraryDetailView: View {
             infoRow(icon: "calendar.badge.minus", label: "休館日", value: library.closedDays)
             Divider().padding(.leading, 52)
             infoRow(icon: "mappin.and.ellipse", label: "住所", value: library.address)
-            if let urlString = library.urlPC, let url = URL(string: urlString) {
-                Divider().padding(.leading, 52)
-                Button {
-                    openURL(url)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "globe")
-                            .frame(width: 28)
-                            .foregroundColor(.toshoGreen)
-                        Text("公式サイト")
-                            .font(.subheadline)
-                            .foregroundColor(.toshoSubtext)
-                            .frame(width: 70, alignment: .leading)
-                        Text(url.host ?? urlString)
-                            .font(.subheadline)
-                            .foregroundColor(.toshoGreen)
-                            .lineLimit(1)
-                        Spacer()
-                        Image(systemName: "arrow.up.right")
-                            .font(.caption)
-                            .foregroundColor(.toshoSubtext)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-            }
         }
         .background(Color.toshoCard)
         .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))

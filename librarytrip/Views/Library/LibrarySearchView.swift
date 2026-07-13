@@ -19,6 +19,18 @@ struct LibrarySearchView: View {
     @State private var selectedPrefecture: String? = nil
     @State private var showPrefecturePicker = false
     @State private var bookCandidatesCache: [BookSearchResult] = []
+    @State private var showBarcodeScanner = false
+
+    // 現在地から近い図書館
+    @State private var nearbyState: NearbyState = .idle
+
+    enum NearbyState {
+        case idle
+        case locating                              // 位置情報を取得中
+        case loading                               // API 問い合わせ中
+        case results([(library: Library, distance: Double)])  // 距離(m)付き
+        case error(String)
+    }
 
     enum RankingAxis: String, CaseIterable {
         case beautiful  = "建築"
@@ -60,6 +72,8 @@ struct LibrarySearchView: View {
                     if case .idle = libraryNameSearchState { } else {
                         libraryNameSearchResultArea
                     }
+                    nearbyLibrariesSection
+                        .padding(.bottom, 28)
                     bookLibrarySearchSection
                         .padding(.bottom, 28)
                     rankingSection
@@ -76,7 +90,18 @@ struct LibrarySearchView: View {
         .sheet(isPresented: $showPrefecturePicker) {
             PrefecturePickerSheet(selected: $selectedPrefecture)
         }
+        .sheet(isPresented: $showBarcodeScanner) {
+            BarcodeScannerView { isbn in
+                Task { await runBookSearch(scannedISBN: isbn) }
+            }
+        }
         .onChange(of: selectedLibrary) { _, new in appState.isPresentingDetailSheet = new != nil }
+        .onChange(of: locationManager.updateCount) { _, _ in
+            // 「近くの図書館」で位置情報待ちだった場合、取得でき次第検索する
+            if case .locating = nearbyState, let coord = locationManager.coordinate {
+                Task { await fetchNearbyRanking(coordinate: coord) }
+            }
+        }
     }
 
     // MARK: - Top Bar
@@ -233,6 +258,165 @@ struct LibrarySearchView: View {
         }
     }
 
+    // MARK: - Nearby Libraries Section（現在地から近い5館）
+
+    private var nearbyLibrariesSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: "location.fill")
+                    .foregroundColor(.toshoRed)
+                Text("現在地から近い図書館")
+                    .font(.zenMincho(size: 17, weight: .semiBold))
+                    .foregroundColor(.toshoText)
+                Spacer()
+                if case .results = nearbyState {
+                    Button {
+                        startNearbySearch()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption.bold())
+                            .foregroundColor(.toshoRed)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+
+            nearbyContent
+        }
+    }
+
+    @ViewBuilder
+    private var nearbyContent: some View {
+        switch nearbyState {
+        case .idle:
+            Button {
+                startNearbySearch()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "location.magnifyingglass")
+                        .font(.headline)
+                    Text("近くの図書館を探す")
+                        .font(.subheadline.bold())
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(Color.toshoRed)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(.horizontal, 20)
+
+        case .locating:
+            nearbyLoadingCard("現在地を取得中...")
+
+        case .loading:
+            nearbyLoadingCard("近くの図書館を検索中...")
+
+        case .results(let items):
+            if items.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title2)
+                        .foregroundColor(.toshoSubtext)
+                    Text("近くに図書館が見つかりませんでした")
+                        .font(.subheadline)
+                        .foregroundColor(.toshoSubtext)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(24)
+                .background(Color.toshoCard)
+                .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+                .padding(.horizontal, 20)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.library.id) { idx, item in
+                        Button { selectedLibrary = item.library } label: {
+                            HStack(spacing: 14) {
+                                // 距離入りの丸バッジ
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.toshoRed.opacity(idx == 0 ? 0.9 : 0.12))
+                                        .frame(width: 30, height: 30)
+                                    Text("\(idx + 1)")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(idx == 0 ? .white : .toshoRed)
+                                }
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(item.library.name)
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(.toshoText)
+                                        .lineLimit(1)
+                                    Text("\(item.library.prefecture) \(item.library.city)")
+                                        .font(.caption)
+                                        .foregroundColor(.toshoSubtext)
+                                }
+                                Spacer()
+                                Text(formatDistance(item.distance))
+                                    .font(.caption.bold())
+                                    .foregroundColor(.toshoRed)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Color.toshoRed.opacity(0.10))
+                                    .clipShape(Capsule())
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.toshoSubtext)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        if idx < items.count - 1 {
+                            Divider().padding(.leading, 60)
+                        }
+                    }
+                }
+                .background(Color.toshoCard)
+                .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius, style: .continuous))
+                .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
+                .padding(.horizontal, 20)
+            }
+
+        case .error(let msg):
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                    Text(msg).font(.subheadline).foregroundColor(.toshoText)
+                }
+                Button("もう一度試す") { startNearbySearch() }
+                    .font(.caption.bold())
+                    .foregroundColor(.toshoRed)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(14)
+            .background(Color.orange.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private func nearbyLoadingCard(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            ProgressView().scaleEffect(0.9).tint(.toshoRed)
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.toshoSubtext)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .background(Color.toshoCard)
+        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius))
+        .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: 8, y: 2)
+        .padding(.horizontal, 20)
+    }
+
+    private func formatDistance(_ meters: Double) -> String {
+        meters < 1000
+            ? "\(Int(meters))m"
+            : String(format: "%.1fkm", meters / 1000)
+    }
+
     // MARK: - Book Library Search Section
 
     private var bookLibrarySearchSection: some View {
@@ -277,6 +461,28 @@ struct LibrarySearchView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .disabled(bookTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.horizontal, 20)
+
+            // バーコード読み取りボタン
+            Button {
+                showBarcodeScanner = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "barcode.viewfinder")
+                        .font(.headline)
+                    Text("バーコードで読み取る")
+                        .font(.subheadline.bold())
+                }
+                .foregroundColor(.toshoRed)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.toshoRed.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.toshoRed.opacity(0.35), lineWidth: 1)
+                )
             }
             .padding(.horizontal, 20)
 
@@ -697,6 +903,45 @@ struct LibrarySearchView: View {
         }
     }
 
+    // MARK: - Nearby Libraries Logic
+
+    /// 「近くの図書館を探す」開始。位置情報があれば即検索、なければ取得を待つ
+    private func startNearbySearch() {
+        if let coord = locationManager.coordinate {
+            Task { await fetchNearbyRanking(coordinate: coord) }
+        } else {
+            nearbyState = .locating
+            locationManager.requestAndLocate()
+            // 位置情報が取れたら onChange(locationManager.updateCount) が発火して検索する
+        }
+    }
+
+    /// 現在地から近い図書館を Calil API で取得し、距離順に5館表示する
+    private func fetchNearbyRanking(coordinate: CLLocationCoordinate2D) async {
+        nearbyState = .loading
+        do {
+            let dtos = try await CalilAPIService.shared.fetchNearbyLibraries(
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                limit: 30
+            )
+            let here = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            let ranked = dtos
+                .map { $0.toLibrary() }
+                .map { lib -> (library: Library, distance: Double) in
+                    let loc = CLLocation(latitude: lib.coordinate.latitude,
+                                         longitude: lib.coordinate.longitude)
+                    return (lib, loc.distance(from: here))
+                }
+                .sorted { $0.distance < $1.distance }
+                .prefix(5)
+            nearbyState = .results(Array(ranked))
+        } catch {
+            nearbyState = .error("図書館の取得に失敗しました")
+            print("[NearbySearch] ❌ error: \(error)")
+        }
+    }
+
     // MARK: - Book Search Logic
 
     // Step 1: タイトルで本を検索して候補一覧を表示
@@ -711,6 +956,34 @@ struct LibrarySearchView: View {
         } catch {
             bookSearchState = .error("書籍の検索に失敗しました: \(error.localizedDescription)")
         }
+    }
+
+    // バーコードスキャン: ISBN → 書誌情報を取得して本の候補として表示
+    private func runBookSearch(scannedISBN isbn: String) async {
+        bookSearchState = .searchingBooks
+        let book: BookSearchResult
+        if let found = try? await CalilAPIService.shared.searchBooks(isbn: isbn).first {
+            // 照会 ISBN はスキャン値（13桁）を優先
+            book = BookSearchResult(
+                isbn: isbn,
+                title: found.title,
+                author: found.author,
+                publisher: found.publisher,
+                coverURL: found.coverURL
+            )
+        } else {
+            // 書誌が見つからなくても ISBN だけで蔵書照会は可能
+            book = BookSearchResult(
+                isbn: isbn,
+                title: "ISBN: \(isbn)",
+                author: "",
+                publisher: "",
+                coverURL: nil
+            )
+        }
+        bookTitle = book.title == "ISBN: \(isbn)" ? "" : book.title
+        bookCandidatesCache = [book]
+        bookSearchState = .bookCandidates([book])
     }
 
     // Step 2: 選んだ本で図書館を検索

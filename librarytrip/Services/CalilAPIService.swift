@@ -411,8 +411,17 @@ struct BookSearchResult: Identifiable, Sendable {
 
 extension CalilAPIService {
     func searchBooks(title: String) async throws -> [BookSearchResult] {
+        try await searchBooks(query: "intitle:\(title)")
+    }
+
+    /// バーコードスキャンで得た ISBN から書誌情報を取得する
+    func searchBooks(isbn: String) async throws -> [BookSearchResult] {
+        try await searchBooks(query: "isbn:\(isbn)")
+    }
+
+    private func searchBooks(query: String) async throws -> [BookSearchResult] {
         var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "q",          value: "intitle:\(title)"),
+            URLQueryItem(name: "q",          value: query),
             URLQueryItem(name: "maxResults", value: "20"),
         ]
         let apiKey = Self.googleBooksAPIKey

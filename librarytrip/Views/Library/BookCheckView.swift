@@ -7,6 +7,7 @@ struct BookCheckView: View {
 
     @State private var titleInput = ""
     @State private var viewState: CheckViewState = .idle
+    @State private var showBarcodeScanner = false
 
     enum CheckViewState {
         case idle
@@ -34,6 +35,11 @@ struct BookCheckView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("閉じる") { dismiss() }
                         .foregroundColor(.toshoGreen)
+                }
+            }
+            .sheet(isPresented: $showBarcodeScanner) {
+                BarcodeScannerView { isbn in
+                    Task { await runCheck(scannedISBN: isbn) }
                 }
             }
         }
@@ -127,6 +133,26 @@ struct BookCheckView: View {
             Text("タイトルで本を検索し、蔵書状況を確認したい本を選んでください")
                 .font(.caption)
                 .foregroundColor(.toshoSubtext)
+
+            Button {
+                showBarcodeScanner = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "barcode.viewfinder")
+                        .font(.headline)
+                    Text("バーコードで読み取る")
+                        .font(.subheadline.bold())
+                }
+                .foregroundColor(.toshoGreen)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.toshoGreen.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.toshoGreen.opacity(0.35), lineWidth: 1)
+                )
+            }
         }
     }
 
@@ -407,6 +433,33 @@ struct BookCheckView: View {
         } catch {
             viewState = .error("書籍の検索に失敗しました: \(error.localizedDescription)")
         }
+    }
+
+    /// バーコードスキャン → 書誌情報を取得 → そのまま蔵書確認まで自動で進む
+    private func runCheck(scannedISBN isbn: String) async {
+        viewState = .searching
+        // 表紙・タイトル表示のため書誌情報を引く。見つからなくても ISBN だけで照会は可能
+        let book: BookSearchResult
+        if let found = try? await CalilAPIService.shared.searchBooks(isbn: isbn).first {
+            // 書誌は Google Books のものを使うが、照会 ISBN はスキャン値（13桁）を優先
+            book = BookSearchResult(
+                isbn: isbn,
+                title: found.title,
+                author: found.author,
+                publisher: found.publisher,
+                coverURL: found.coverURL
+            )
+        } else {
+            book = BookSearchResult(
+                isbn: isbn,
+                title: "ISBN: \(isbn)",
+                author: "",
+                publisher: "",
+                coverURL: nil
+            )
+        }
+        titleInput = book.title
+        await runCheck(for: book)
     }
 
     private func runCheck(for book: BookSearchResult) async {
