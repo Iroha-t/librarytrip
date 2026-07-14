@@ -67,7 +67,10 @@ struct LibraryDetailView: View {
             BookCheckView(library: library)
                 .environmentObject(appState)
         }
-        .sheet(isPresented: $showVisitReviewSheet) {
+        .sheet(isPresented: $showVisitReviewSheet, onDismiss: {
+            // 投稿・編集・削除の直後に公開レビュー一覧を取り直して即時反映する
+            Task { await reloadReviews() }
+        }) {
             VisitReviewSheet(library: library)
                 .environmentObject(appState)
         }
@@ -77,9 +80,7 @@ struct LibraryDetailView: View {
             }
         }
         .task {
-            isLoadingReviews = true
-            publicReviews = await appState.loadPublicReviews(for: library)
-            isLoadingReviews = false
+            await reloadReviews()
 
             let request = MKLocalSearch.Request()
             request.naturalLanguageQuery = library.name
@@ -391,6 +392,13 @@ struct LibraryDetailView: View {
     }
 
     // MARK: - Helpers
+
+    /// 公開レビュー一覧を取り直す。表示直後と、投稿シートを閉じた直後に呼ぶ。
+    private func reloadReviews() async {
+        isLoadingReviews = true
+        publicReviews = await appState.loadPublicReviews(for: library)
+        isLoadingReviews = false
+    }
 
     private func infoRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {

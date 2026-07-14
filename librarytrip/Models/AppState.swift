@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import Combine
+import CryptoKit
 import Supabase
 
 @MainActor
@@ -25,21 +26,94 @@ class AppState: ObservableObject {
     private var wishlistStableKeys: Set<String> = []
     private let wishlistDefaultsKey = "librarytrip_wishlist_stable_keys"
 
+    /// Supabase から読み込んだ行。API取得済み一覧に該当図書館が無くても
+    /// これらから表示用の図書館を復元できるように保持しておく。
+    private var visitedRows: [VisitedLibraryRow] = []
+    private var wishlistRows: [WishlistLibraryRow] = []
+
+    /// 端末識別子。Keychain に保存するのでアプリを削除・再インストールしても残る。
+    let deviceId: String
+
     init() {
+        deviceId = Self.resolveDeviceId()
         let saved = UserDefaults.standard.stringArray(forKey: wishlistDefaultsKey) ?? []
         wishlistStableKeys = Set(saved)
         syncWishlistIds()
     }
 
-    private var deviceId: String {
-        if let id = UserDefaults.standard.string(forKey: "librarytrip_device_id") { return id }
+    /// 端末識別子を解決する。
+    /// 1. Keychain にあればそれを使う（再インストールでも残る）
+    /// 2. 旧バージョンが UserDefaults に保存していた値があれば Keychain へ移行
+    /// 3. どちらも無ければ新規生成して Keychain に保存
+    private static func resolveDeviceId() -> String {
+        let key = "librarytrip_device_id"
+        if let id = KeychainHelper.string(for: key) {
+            return id
+        }
+        if let legacy = UserDefaults.standard.string(forKey: key) {
+            KeychainHelper.set(legacy, for: key)
+            return legacy
+        }
         let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: "librarytrip_device_id")
+        KeychainHelper.set(id, for: key)
+        UserDefaults.standard.set(id, forKey: key)
         return id
     }
 
     private func stableKey(for library: Library) -> String {
         library.libId ?? "\(library.name)_\(library.prefecture)_\(library.city)"
+    }
+
+    /// stableKey から決定的な UUID を作る（再計算しても同じ値になる）。
+    /// 保存済みデータから復元した図書館に安定した id を与えるために使う。
+    private func stableUUID(from key: String) -> UUID {
+        let digest = Insecure.MD5.hash(data: Data(key.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        let uuidString =
+            "\(hex.prefix(8))-\(hex.dropFirst(8).prefix(4))-\(hex.dropFirst(12).prefix(4))-\(hex.dropFirst(16).prefix(4))-\(hex.dropFirst(20).prefix(12))"
+        return UUID(uuidString: uuidString.uppercased()) ?? UUID()
+    }
+
+    /// 保存済み行から表示用の図書館スタブを作る。
+    private func makeStub(
+        stableKey key: String,
+        name: String, pref: String, city: String, address: String,
+        latitude: Double, longitude: Double, libId: String?
+    ) -> Library {
+        // stableKey(for:) と一致するように libId を復元する。
+        // key が "名前_県_市" 形式ならフォールバックキー（libId なし）、そうでなければ libId。
+        let resolvedLibId: String? = {
+            if let libId, !libId.isEmpty { return libId }
+            return key == "\(name)_\(pref)_\(city)" ? nil : key
+        }()
+        return Library(
+            id: stableUUID(from: key),
+            name: name, prefecture: pref, city: city, address: address,
+            latitude: latitude, longitude: longitude,
+            openingHours: "要確認", closedDays: "要確認", collectionCount: 0,
+            libId: resolvedLibId
+        )
+    }
+
+    /// 訪問・保存の行から復元した図書館一覧（stableKey で重複排除）。
+    private var savedLibraryStubs: [Library] {
+        var byKey: [String: Library] = [:]
+        for r in visitedRows {
+            byKey[r.stableKey] = makeStub(
+                stableKey: r.stableKey, name: r.libraryName,
+                pref: r.prefecture, city: r.city, address: r.address,
+                latitude: 0, longitude: 0, libId: nil
+            )
+        }
+        for r in wishlistRows {
+            // ウィッシュリスト行は座標も持つので優先して上書き
+            byKey[r.stableKey] = makeStub(
+                stableKey: r.stableKey, name: r.libraryName,
+                pref: r.prefecture, city: r.city, address: r.address,
+                latitude: r.latitude, longitude: r.longitude, libId: r.libId
+            )
+        }
+        return Array(byKey.values)
     }
 
     // MARK: - Computed
@@ -50,7 +124,14 @@ class AppState: ObservableObject {
             guard let lid = lib.libId else { return true }
             return !apiIds.contains(lid)
         }
-        return apiLibraries + sampleOnly
+        var result = apiLibraries + sampleOnly
+        // API 取得済み一覧に含まれない保存済み図書館は、行データから復元して補う。
+        // これにより、取得漏れやフェッチ未完了でも保存・訪問した図書館が消えない。
+        let presentKeys = Set(result.map { stableKey(for: $0) })
+        for stub in savedLibraryStubs where !presentKeys.contains(stableKey(for: stub)) {
+            result.append(stub)
+        }
+        return result
     }
 
     var visitedLibraries: [Library] {
@@ -91,6 +172,7 @@ class AppState: ObservableObject {
         if visitedLibraryIds.contains(library.id) {
             visitedLibraryIds.remove(library.id)
             visitedStableKeys.remove(key)
+            visitedRows.removeAll { $0.stableKey == key }
             Task {
                 do {
                     try await supabase
@@ -106,16 +188,18 @@ class AppState: ObservableObject {
         } else {
             visitedLibraryIds.insert(library.id)
             visitedStableKeys.insert(key)
+            let row = VisitedLibraryRow(
+                deviceId: deviceId,
+                stableKey: key,
+                libraryName: library.name,
+                prefecture: library.prefecture,
+                city: library.city,
+                address: library.address
+            )
+            visitedRows.removeAll { $0.stableKey == key }
+            visitedRows.append(row)
             Task {
                 do {
-                    let row = VisitedLibraryRow(
-                        deviceId: deviceId,
-                        stableKey: key,
-                        libraryName: library.name,
-                        prefecture: library.prefecture,
-                        city: library.city,
-                        address: library.address
-                    )
                     try await supabase
                         .from("visited_libraries")
                         .upsert(row, onConflict: "device_id,stable_key")
@@ -132,10 +216,47 @@ class AppState: ObservableObject {
         if wishlistLibraryIds.contains(library.id) {
             wishlistLibraryIds.remove(library.id)
             wishlistStableKeys.remove(key)
+            wishlistRows.removeAll { $0.stableKey == key }
+            Task {
+                do {
+                    try await supabase
+                        .from("wishlist_libraries")
+                        .delete()
+                        .eq("device_id", value: deviceId)
+                        .eq("stable_key", value: key)
+                        .execute()
+                } catch {
+                    print("[AppState] ❌ toggleWishlist delete: \(error)")
+                }
+            }
         } else {
             wishlistLibraryIds.insert(library.id)
             wishlistStableKeys.insert(key)
+            let row = WishlistLibraryRow(
+                deviceId: deviceId,
+                stableKey: key,
+                libraryName: library.name,
+                prefecture: library.prefecture,
+                city: library.city,
+                address: library.address,
+                latitude: library.coordinate.latitude,
+                longitude: library.coordinate.longitude,
+                libId: library.libId
+            )
+            wishlistRows.removeAll { $0.stableKey == key }
+            wishlistRows.append(row)
+            Task {
+                do {
+                    try await supabase
+                        .from("wishlist_libraries")
+                        .upsert(row, onConflict: "device_id,stable_key")
+                        .execute()
+                } catch {
+                    print("[AppState] ❌ toggleWishlist upsert: \(error)")
+                }
+            }
         }
+        // ローカルにもキャッシュ（オフライン時や起動直後の即時表示用）
         UserDefaults.standard.set(Array(wishlistStableKeys), forKey: wishlistDefaultsKey)
     }
 
@@ -149,6 +270,7 @@ class AppState: ObservableObject {
                 .eq("device_id", value: deviceId)
                 .execute()
                 .value
+            visitedRows = rows
             visitedStableKeys = Set(rows.map { $0.stableKey })
             syncVisitedIds()
             print("[AppState] ✅ loadVisitedLibraries: \(visitedStableKeys.count)件")
@@ -166,6 +288,60 @@ class AppState: ObservableObject {
             print("[AppState] ✅ loadMyReviews: \(myReviews.count)件")
         } catch {
             print("[AppState] ❌ loadMyReviews: \(error)")
+        }
+    }
+
+    /// 保存した図書館（ウィッシュリスト）を Supabase から読み込む。
+    /// サーバーとローカル（UserDefaults）をマージして表示に使う。
+    func loadWishlistLibraries() async {
+        do {
+            let rows: [WishlistLibraryRow] = try await supabase
+                .from("wishlist_libraries")
+                .select()
+                .eq("device_id", value: deviceId)
+                .execute()
+                .value
+            wishlistRows = rows
+            wishlistStableKeys.formUnion(rows.map { $0.stableKey })
+            UserDefaults.standard.set(Array(wishlistStableKeys), forKey: wishlistDefaultsKey)
+            syncWishlistIds()
+            print("[AppState] ✅ loadWishlistLibraries: \(rows.count)件")
+        } catch {
+            print("[AppState] ❌ loadWishlistLibraries: \(error)")
+        }
+    }
+
+    /// 旧バージョンで UserDefaults にしか無かった保存図書館を、
+    /// 図書館データを解決できたものからサーバーへ書き戻す（次回以降の再インストールでも残るように）。
+    private func backfillWishlistToServer() {
+        let serverKeys = Set(wishlistRows.map { $0.stableKey })
+        let missing = wishlistStableKeys.subtracting(serverKeys)
+        guard !missing.isEmpty else { return }
+        let all = allLibraries
+        for key in missing {
+            guard let lib = all.first(where: { stableKey(for: $0) == key }) else { continue }
+            let row = WishlistLibraryRow(
+                deviceId: deviceId,
+                stableKey: key,
+                libraryName: lib.name,
+                prefecture: lib.prefecture,
+                city: lib.city,
+                address: lib.address,
+                latitude: lib.coordinate.latitude,
+                longitude: lib.coordinate.longitude,
+                libId: lib.libId
+            )
+            wishlistRows.append(row)
+            Task {
+                do {
+                    try await supabase
+                        .from("wishlist_libraries")
+                        .upsert(row, onConflict: "device_id,stable_key")
+                        .execute()
+                } catch {
+                    print("[AppState] ❌ backfillWishlist: \(error)")
+                }
+            }
         }
     }
 
@@ -199,16 +375,18 @@ class AppState: ObservableObject {
         if !visitedLibraryIds.contains(library.id) {
             visitedLibraryIds.insert(library.id)
             visitedStableKeys.insert(key)
+            let row = VisitedLibraryRow(
+                deviceId: deviceId,
+                stableKey: key,
+                libraryName: library.name,
+                prefecture: library.prefecture,
+                city: library.city,
+                address: library.address
+            )
+            visitedRows.removeAll { $0.stableKey == key }
+            visitedRows.append(row)
             Task {
                 do {
-                    let row = VisitedLibraryRow(
-                        deviceId: deviceId,
-                        stableKey: key,
-                        libraryName: library.name,
-                        prefecture: library.prefecture,
-                        city: library.city,
-                        address: library.address
-                    )
                     try await supabase
                         .from("visited_libraries")
                         .upsert(row, onConflict: "device_id,stable_key")
@@ -296,6 +474,7 @@ class AppState: ObservableObject {
         let key = stableKey(for: library)
         visitedLibraryIds.remove(library.id)
         visitedStableKeys.remove(key)
+        visitedRows.removeAll { $0.stableKey == key }
         myReviews.removeValue(forKey: key)
         do {
             try await supabase
@@ -399,6 +578,9 @@ class AppState: ObservableObject {
         isLoadingLibraries = false
         isFetchingAll = false
         print("[AppState] 🗾 全国図書館フェッチ完了: \(apiLibraries.count)件")
+
+        // ローカルにしか無かった保存図書館をサーバーへ書き戻す
+        backfillWishlistToServer()
     }
 
     private func mergeIntoApiLibraries(_ newLibraries: [Library]) {

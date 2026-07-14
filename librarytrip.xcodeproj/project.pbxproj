@@ -100,7 +100,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2650;
-				LastUpgradeCheck = 2650;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					6A62CAA32FC75AA20049887F = {
 						CreatedOnToolsVersion = 26.5;
@@ -209,6 +209,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -265,6 +266,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -285,7 +287,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				GOOGLE_BOOKS_API_KEY = "AIzaSyCua-tt4nA8J9RdUUvXz2DU8y7T3nBxIWA\n";
 				INFOPLIST_FILE = librarytrip/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "本のISBNバーコードを読み取って蔵書を確認するために使用します"; INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "図書館の周辺検索と現在地表示に使用します";
+				INFOPLIST_KEY_NSCameraUsageDescription = "本のISBNバーコードを読み取って蔵書を確認するために使用します";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "図書館の周辺検索と現在地表示に使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -295,7 +298,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = app.takeuchi.iroiro.librarytrip.lit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -326,7 +329,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				GOOGLE_BOOKS_API_KEY = "AIzaSyCua-tt4nA8J9RdUUvXz2DU8y7T3nBxIWA\n";
 				INFOPLIST_FILE = librarytrip/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "本のISBNバーコードを読み取って蔵書を確認するために使用します"; INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "図書館の周辺検索と現在地表示に使用します";
+				INFOPLIST_KEY_NSCameraUsageDescription = "本のISBNバーコードを読み取って蔵書を確認するために使用します";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "図書館の周辺検索と現在地表示に使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -336,7 +340,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = app.takeuchi.iroiro.librarytrip.lit;
 				PRODUCT_NAME = "$(TARGET_NAME)";

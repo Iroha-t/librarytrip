@@ -46,6 +46,7 @@ struct ContentView: View {
         .task {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await appState.loadVisitedLibraries() }
+                group.addTask { await appState.loadWishlistLibraries() }
                 group.addTask { await appState.fetchAllLibraries() }
             }
         }
