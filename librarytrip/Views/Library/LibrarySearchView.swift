@@ -20,6 +20,9 @@ struct LibrarySearchView: View {
     @State private var showPrefecturePicker = false
     @State private var bookCandidatesCache: [BookSearchResult] = []
     @State private var showBarcodeScanner = false
+    @State private var searchHistory: [String] = []
+    @State private var resultSort: ResultSort = .relevance
+    @State private var resultViewMode: ResultViewMode = .list
 
     // 現在地から近い図書館
     @State private var nearbyState: NearbyState = .idle
@@ -46,6 +49,27 @@ struct LibrarySearchView: View {
         case error(String)
     }
 
+    /// 検索結果の並び替え方法。今あるデータで確実に出せるものだけ用意する。
+    enum ResultSort: String, CaseIterable {
+        case relevance = "検索順"
+        case name      = "名前順"
+        case distance  = "近い順"
+
+        var icon: String {
+            switch self {
+            case .relevance: return "sparkles"
+            case .name:      return "textformat"
+            case .distance:  return "location.fill"
+            }
+        }
+    }
+
+    /// 検索結果をリストで見るか、地図で見るかの表示モード。
+    enum ResultViewMode {
+        case list
+        case map
+    }
+
     enum BookSearchState {
         case idle
         case searchingBooks                          // タイトル検索中
@@ -69,6 +93,9 @@ struct LibrarySearchView: View {
                 VStack(spacing: 0) {
                     topBar
                     searchBar
+                    if searchText.isEmpty, case .idle = libraryNameSearchState {
+                        searchHistorySection
+                    }
                     if case .idle = libraryNameSearchState { } else {
                         libraryNameSearchResultArea
                     }
@@ -102,6 +129,71 @@ struct LibrarySearchView: View {
                 Task { await fetchNearbyRanking(coordinate: coord) }
             }
         }
+        .onAppear { searchHistory = SearchHistoryStore.load() }
+    }
+
+    // MARK: - 検索履歴
+
+    /// 最近検索した地名・図書館名をタグで表示し、タップで再検索できるようにする。
+    @ViewBuilder
+    private var searchHistorySection: some View {
+        if !searchHistory.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("最近の検索")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.toshoSubtext)
+                    Spacer()
+                    Button {
+                        SearchHistoryStore.clear()
+                        searchHistory = []
+                    } label: {
+                        Text("すべて消す")
+                            .font(.system(size: 12))
+                            .foregroundColor(.toshoSubtext)
+                    }
+                }
+
+                FlowLayout(spacing: 8) {
+                    ForEach(searchHistory, id: \.self) { keyword in
+                        searchHistoryChip(keyword)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+        }
+    }
+
+    /// 検索履歴1件分のタグ。本体をタップで再検索、×で1件だけ削除する。
+    private func searchHistoryChip(_ keyword: String) -> some View {
+        HStack(spacing: 6) {
+            Button {
+                searchText = keyword
+                Task { await searchLibraries() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 11))
+                    Text(keyword)
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.toshoText)
+            }
+            Button {
+                SearchHistoryStore.remove(keyword)
+                searchHistory = SearchHistoryStore.load()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.toshoSubtext)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.toshoCard)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
     }
 
     // MARK: - Top Bar
@@ -117,6 +209,154 @@ struct LibrarySearchView: View {
         .padding(.top, 56)
         .padding(.bottom, 8)
         .background(Color.toshoCream)
+    }
+
+    // MARK: - 並び替え
+
+    /// 検索結果の並び替えを選ぶメニュー。
+    private var sortMenu: some View {
+        Menu {
+            ForEach(ResultSort.allCases, id: \.self) { option in
+                Button {
+                    resultSort = option
+                    // 「近い順」を選んだとき、まだ現在地が無ければ取得を始める
+                    if option == .distance, locationManager.coordinate == nil {
+                        locationManager.requestAndLocate()
+                    }
+                } label: {
+                    Label(option.rawValue, systemImage: option.icon)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(resultSort.rawValue)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(.toshoRed)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.toshoRed.opacity(0.10))
+            .clipShape(Capsule())
+        }
+    }
+
+    /// 選んだ並び替え方法で検索結果を並べ替える。
+    private func sortedResults(_ libs: [Library]) -> [Library] {
+        switch resultSort {
+        case .relevance:
+            return libs
+        case .name:
+            return libs.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .distance:
+            guard let coord = locationManager.coordinate else { return libs }
+            let here = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            return libs.sorted {
+                let d0 = here.distance(from: CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude))
+                let d1 = here.distance(from: CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude))
+                return d0 < d1
+            }
+        }
+    }
+
+    /// 現在地から図書館までの距離を「350m」「1.2km」の形で返す（現在地が無ければ nil）。
+    private func distanceText(for library: Library) -> String? {
+        guard let coord = locationManager.coordinate else { return nil }
+        let here = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+        let there = CLLocation(latitude: library.coordinate.latitude, longitude: library.coordinate.longitude)
+        let meters = here.distance(from: there)
+        if meters < 1000 { return "\(Int(meters))m" }
+        return String(format: "%.1fkm", meters / 1000)
+    }
+
+    // MARK: - リスト / 地図 切り替え
+
+    /// 検索結果を「リスト」で見るか「地図」で見るかを切り替えるボタン。
+    private var viewModeToggle: some View {
+        HStack(spacing: 0) {
+            viewModeButton(.list, icon: "list.bullet", label: "リスト")
+            viewModeButton(.map, icon: "map", label: "地図")
+        }
+        .padding(2)
+        .background(Color.toshoRed.opacity(0.08))
+        .clipShape(Capsule())
+    }
+
+    /// 切り替えボタンの1つ分。選ばれている方を赤く塗る。
+    private func viewModeButton(_ mode: ResultViewMode, icon: String, label: String) -> some View {
+        Button {
+            resultViewMode = mode
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(resultViewMode == mode ? .white : .toshoRed)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(resultViewMode == mode ? Color.toshoRed : Color.clear)
+            .clipShape(Capsule())
+        }
+    }
+
+    /// 検索結果の図書館を地図にピンで表示する。ピンをタップすると詳細が開く。
+    @ViewBuilder
+    private func libraryResultsMap(_ libs: [Library]) -> some View {
+        let mappable = libs.filter { $0.coordinate.latitude != 0 || $0.coordinate.longitude != 0 }
+        if mappable.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "mappin.slash")
+                    .font(.title3)
+                    .foregroundColor(.toshoSubtext)
+                Text("地図に表示できる位置情報がありませんでした")
+                    .font(.caption)
+                    .foregroundColor(.toshoSubtext)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 220)
+        } else {
+            Map(initialPosition: .region(regionThatFits(mappable))) {
+                ForEach(mappable) { lib in
+                    Annotation(lib.name, coordinate: lib.coordinate) {
+                        Button { selectedLibrary = lib } label: {
+                            Image(systemName: "building.columns.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .padding(7)
+                                .background(Color.toshoRed)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                        }
+                    }
+                }
+            }
+            .frame(height: 320)
+            .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.smallCornerRadius, style: .continuous))
+        }
+    }
+
+    /// 渡された図書館がすべて収まるように地図の表示範囲を計算する。
+    private func regionThatFits(_ libs: [Library]) -> MKCoordinateRegion {
+        let lats = libs.map { $0.coordinate.latitude }
+        let lons = libs.map { $0.coordinate.longitude }
+        let minLat = lats.min() ?? 36.2
+        let maxLat = lats.max() ?? 36.2
+        let minLon = lons.min() ?? 138.2
+        let maxLon = lons.max() ?? 138.2
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) * 1.4, 0.02),
+            longitudeDelta: max((maxLon - minLon) * 1.4, 0.02)
+        )
+        return MKCoordinateRegion(center: center, span: span)
     }
 
     // MARK: - Search Bar（図書館名・地名）
@@ -188,16 +428,23 @@ struct LibrarySearchView: View {
             .padding(.bottom, 16)
 
         case .results(let libs):
+            let sortedLibs = sortedResults(libs)
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text(libs.isEmpty ? "該当する図書館が見つかりませんでした" : "検索結果 \(libs.count)件")
                         .font(.caption)
                         .foregroundColor(.toshoSubtext)
                     Spacer()
+                    if !libs.isEmpty {
+                        if resultViewMode == .list {
+                            sortMenu
+                        }
+                        viewModeToggle
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
-                .padding(.bottom, libs.isEmpty ? 12 : 4)
+                .padding(.bottom, libs.isEmpty ? 12 : 8)
 
                 if libs.isEmpty {
                     VStack(spacing: 6) {
@@ -211,8 +458,13 @@ struct LibrarySearchView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 20)
+                } else if resultViewMode == .map {
+                    libraryResultsMap(Array(sortedLibs.prefix(30)))
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
                 } else {
-                    ForEach(Array(libs.prefix(30).enumerated()), id: \.element.id) { idx, lib in
+                    let shown = Array(sortedLibs.prefix(30))
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { idx, lib in
                         Button { selectedLibrary = lib } label: {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -225,6 +477,12 @@ struct LibrarySearchView: View {
                                         .foregroundColor(.toshoSubtext)
                                 }
                                 Spacer()
+                                if resultSort == .distance,
+                                   let distanceText = distanceText(for: lib) {
+                                    Text(distanceText)
+                                        .font(.caption.bold())
+                                        .foregroundColor(.toshoRed)
+                                }
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
                                     .foregroundColor(.toshoSubtext)
@@ -233,7 +491,7 @@ struct LibrarySearchView: View {
                             .padding(.vertical, 12)
                         }
                         .buttonStyle(.plain)
-                        if idx < min(29, libs.count - 1) {
+                        if idx < shown.count - 1 {
                             Divider().padding(.leading, 16)
                         }
                     }
@@ -1100,6 +1358,10 @@ struct LibrarySearchView: View {
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { libraryNameSearchState = .idle; return }
         libraryNameSearchState = .loading
+
+        // 検索したキーワードを履歴に残す
+        SearchHistoryStore.add(query)
+        searchHistory = SearchHistoryStore.load()
 
         // ローカルキャッシュを先にフィルタ
         let local = appState.allLibraries.filter {

@@ -105,16 +105,12 @@ struct MyPageView: View {
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
                 guard let data = try? await newItem?.loadTransferable(type: Data.self),
-                      let original = UIImage(data: data),
-                      let compressed = original.jpegData(compressionQuality: 0.7) else { return }
-                avatarImage = UIImage(data: compressed)
-                UserDefaults.standard.set(compressed, forKey: "avatar_image")
+                      let original = UIImage(data: data) else { return }
+                avatarImage = AvatarStore.save(original)
             }
         }
         .onAppear {
-            if let data = UserDefaults.standard.data(forKey: "avatar_image") {
-                avatarImage = UIImage(data: data)
-            }
+            avatarImage = AvatarStore.load()
         }
         .alert("ニックネームを変更", isPresented: $showEditNickname) {
             TextField("ニックネーム", text: $nicknameInput)

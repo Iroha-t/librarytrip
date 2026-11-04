@@ -6,6 +6,7 @@ struct HomeView: View {
     @State private var selectedLibrary: Library?
     @State private var showMyTrip = false
     @State private var showMyPage = false
+    @State private var avatarImage: UIImage?
 
     var body: some View {
         NavigationStack {
@@ -30,13 +31,17 @@ struct HomeView: View {
             MyTripView()
                 .environmentObject(appState)
         }
-        .sheet(isPresented: $showMyPage) {
+        .sheet(isPresented: $showMyPage, onDismiss: {
+            // マイページで変更したアイコン写真をホームにも反映
+            avatarImage = AvatarStore.load()
+        }) {
             MyPageView()
                 .environmentObject(appState)
         }
         .onChange(of: selectedLibrary) { _, new in appState.isPresentingDetailSheet = new != nil }
         .onChange(of: showMyTrip)      { _, new in appState.isPresentingDetailSheet = new }
         .onChange(of: showMyPage)      { _, new in appState.isPresentingDetailSheet = new }
+        .onAppear { avatarImage = AvatarStore.load() }
     }
 
     // MARK: - Top Bar
@@ -50,13 +55,21 @@ struct HomeView: View {
             Button {
                 showMyPage = true
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.toshoRed.opacity(0.10))
+                if let avatarImage {
+                    Image(uiImage: avatarImage)
+                        .resizable()
+                        .scaledToFill()
                         .frame(width: 38, height: 38)
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 15))
-                        .foregroundColor(.toshoRed)
+                        .clipShape(Circle())
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(Color.toshoRed.opacity(0.10))
+                            .frame(width: 38, height: 38)
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 15))
+                            .foregroundColor(.toshoRed)
+                    }
                 }
             }
         }
