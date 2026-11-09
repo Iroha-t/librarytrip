@@ -7,6 +7,16 @@ struct HomeView: View {
     @State private var showMyTrip = false
     @State private var showMyPage = false
     @State private var avatarImage: UIImage?
+    @State private var showNearby = false
+    @State private var showScanner = false
+    @State private var pendingISBN: String?
+    @State private var returnBook: ScannedBook?
+
+    /// どれか1つでも画面（シート）が開いているか。
+    private var isAnySheetOpen: Bool {
+        selectedLibrary != nil || showMyTrip || showMyPage
+            || showNearby || showScanner || pendingISBN != nil || returnBook != nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -14,6 +24,12 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     topBar
                     heroSection
+                    HomeQuickActions(
+                        onNearby: { showNearby = true },
+                        onReturn: { showScanner = true }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
                     statCards
                     savedLibrariesSection
                     recentVisitsSection
@@ -38,10 +54,26 @@ struct HomeView: View {
             MyPageView()
                 .environmentObject(appState)
         }
-        .onChange(of: selectedLibrary) { _, new in appState.isPresentingDetailSheet = new != nil }
-        .onChange(of: showMyTrip)      { _, new in appState.isPresentingDetailSheet = new }
-        .onChange(of: showMyPage)      { _, new in appState.isPresentingDetailSheet = new }
+        .sheet(isPresented: $showNearby) {
+            NearbyLibrariesSheet()
+                .environmentObject(appState)
+        }
+        .sheet(isPresented: $showScanner, onDismiss: openReturnSheetIfScanned) {
+            BarcodeScannerView { isbn in pendingISBN = isbn }
+        }
+        .sheet(item: $returnBook) { book in
+            ReturnBookSheet(isbn: book.isbn)
+                .environmentObject(appState)
+        }
+        .onChange(of: isAnySheetOpen) { _, new in appState.isPresentingDetailSheet = new }
         .onAppear { avatarImage = AvatarStore.load() }
+    }
+
+    /// バーコード読み取り画面が閉じたあとに、読み取った本の「返す図書館」画面を開く。
+    private func openReturnSheetIfScanned() {
+        guard let isbn = pendingISBN else { return }
+        pendingISBN = nil
+        returnBook = ScannedBook(isbn: isbn)
     }
 
     // MARK: - Top Bar

@@ -908,6 +908,11 @@ final class LocationManager: NSObject {
         clManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
     }
 
+    /// 位置情報の利用が拒否（または制限）されているか。
+    var isAuthorizationDenied: Bool {
+        clManager.authorizationStatus == .denied || clManager.authorizationStatus == .restricted
+    }
+
     func requestAndLocate() {
         switch clManager.authorizationStatus {
         case .notDetermined:
