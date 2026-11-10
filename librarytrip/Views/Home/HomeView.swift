@@ -170,59 +170,29 @@ struct HomeView: View {
             if appState.wishlistLibraries.isEmpty {
                 emptySavedPlaceholder
             } else {
+                let saved = appState.wishlistLibraries
+                SavedLibrariesProgress(
+                    visitedCount: saved.filter { appState.visitedLibraryIds.contains($0.id) }.count,
+                    totalCount: saved.count
+                )
+                .padding(.horizontal, 20)
+
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
-                        ForEach(appState.wishlistLibraries.prefix(12)) { library in
-                            savedLibraryCard(library)
-                                .onTapGesture { selectedLibrary = library }
+                        ForEach(saved.prefix(12)) { library in
+                            SavedLibraryCard(
+                                library: library,
+                                isVisited: appState.visitedLibraryIds.contains(library.id)
+                            )
+                            .onTapGesture { selectedLibrary = library }
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 4)
+                    .padding(.vertical, 10)
                 }
             }
         }
         .padding(.bottom, 24)
-    }
-
-    private func savedLibraryCard(_ library: Library) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.95, green: 0.88, blue: 0.78),
-                                Color(red: 0.88, green: 0.78, blue: 0.66)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                Image(systemName: "building.columns.fill")
-                    .font(.system(size: 26))
-                    .foregroundColor(Color.toshoBrown.opacity(0.45))
-
-                Image(systemName: "bookmark.fill")
-                    .font(.system(size: 11))
-                    .foregroundColor(.toshoRed)
-                    .padding(8)
-            }
-            .frame(width: 100, height: 100)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(library.name)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.toshoText)
-                    .lineLimit(2)
-                    .frame(width: 100, alignment: .leading)
-                Text(library.city)
-                    .font(.system(size: 10))
-                    .foregroundColor(.toshoSubtext)
-                    .lineLimit(1)
-                    .frame(width: 100, alignment: .leading)
-            }
-        }
     }
 
     private var emptySavedPlaceholder: some View {

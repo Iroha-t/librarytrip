@@ -22,6 +22,7 @@ struct LibrarySearchView: View {
     @State private var showBarcodeScanner = false
     @State private var searchHistory: [String] = []
     @State private var resultSort: ResultSort = .relevance
+    @FocusState private var isSearchFocused: Bool
 
     // 現在地から近い図書館
     @State private var nearbyState: NearbyState = .idle
@@ -92,8 +93,10 @@ struct LibrarySearchView: View {
                     if case .idle = libraryNameSearchState { } else {
                         libraryNameSearchResultArea
                     }
-                    nearbyLibrariesSection
-                        .padding(.bottom, 28)
+                    if isSearchFocused, searchText.isEmpty, case .idle = libraryNameSearchState {
+                        nearbyLibrariesSection
+                            .padding(.bottom, 28)
+                    }
                     bookLibrarySearchSection
                         .padding(.bottom, 28)
                     rankingSection
@@ -123,6 +126,12 @@ struct LibrarySearchView: View {
             }
         }
         .onAppear { searchHistory = SearchHistoryStore.load() }
+        .onChange(of: isSearchFocused) { _, focused in
+            // 検索欄に入力しようとしたとき、まだ調べていなければ近くの図書館を探す
+            if focused, case .idle = nearbyState {
+                startNearbySearch()
+            }
+        }
     }
 
     // MARK: - 検索履歴
@@ -272,6 +281,7 @@ struct LibrarySearchView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.toshoSubtext)
                 TextField("図書館名・地名・都道府県で検索", text: $searchText)
+                    .focused($isSearchFocused)
                     .font(.subheadline)
                     .submitLabel(.search)
                     .onSubmit { Task { await searchLibraries() } }
@@ -415,51 +425,16 @@ struct LibrarySearchView: View {
 
     // MARK: - Nearby Libraries Section（現在地から近い5館）
 
+    /// 検索欄に入力しようとしたときに出す、現在地から近い図書館の一覧。
     private var nearbyLibrariesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Image(systemName: "location.fill")
-                    .foregroundColor(.toshoRed)
-                Text("現在地から近い図書館")
-                    .font(.zenMincho(size: 17, weight: .semiBold))
-                    .foregroundColor(.toshoText)
-                Spacer()
-                if case .results = nearbyState {
-                    Button {
-                        startNearbySearch()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.caption.bold())
-                            .foregroundColor(.toshoRed)
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-
-            nearbyContent
-        }
+        nearbyContent
     }
 
     @ViewBuilder
     private var nearbyContent: some View {
         switch nearbyState {
         case .idle:
-            Button {
-                startNearbySearch()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "location.magnifyingglass")
-                        .font(.headline)
-                    Text("近くの図書館を探す")
-                        .font(.subheadline.bold())
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(Color.toshoRed)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .padding(.horizontal, 20)
+            EmptyView()
 
         case .locating:
             nearbyLoadingCard("現在地を取得中...")
@@ -1064,6 +1039,8 @@ struct LibrarySearchView: View {
     private func startNearbySearch() {
         if let coord = locationManager.coordinate {
             Task { await fetchNearbyRanking(coordinate: coord) }
+        } else if locationManager.isAuthorizationDenied {
+            nearbyState = .error("位置情報が許可されていません。設定アプリで、としょたびの位置情報を許可してください")
         } else {
             nearbyState = .locating
             locationManager.requestAndLocate()
@@ -1255,6 +1232,7 @@ struct LibrarySearchView: View {
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { libraryNameSearchState = .idle; return }
         libraryNameSearchState = .loading
+        isSearchFocused = false
 
         // 検索したキーワードを履歴に残す
         SearchHistoryStore.add(query)
