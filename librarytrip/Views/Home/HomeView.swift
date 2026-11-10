@@ -170,16 +170,9 @@ struct HomeView: View {
             if appState.wishlistLibraries.isEmpty {
                 emptySavedPlaceholder
             } else {
-                let saved = appState.wishlistLibraries
-                SavedLibrariesProgress(
-                    visitedCount: saved.filter { appState.visitedLibraryIds.contains($0.id) }.count,
-                    totalCount: saved.count
-                )
-                .padding(.horizontal, 20)
-
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
-                        ForEach(saved.prefix(12)) { library in
+                    HStack(spacing: 12) {
+                        ForEach(appState.wishlistLibraries.prefix(12)) { library in
                             SavedLibraryCard(
                                 library: library,
                                 isVisited: appState.visitedLibraryIds.contains(library.id)

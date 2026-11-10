@@ -26,12 +26,12 @@ struct SavedLibraryCard: View {
                 Spacer(minLength: 8)
                 titleBlock
             }
-            .padding(12)
+            .padding(10)
         }
-        .frame(width: 138, height: 168)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frame(width: 112, height: 136)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(isVisited ? Color.toshoAmber : Color.clear, lineWidth: 2.5)
         )
         .shadow(
@@ -50,9 +50,9 @@ struct SavedLibraryCard: View {
                 endPoint: .bottomTrailing
             )
             Text(watermark)
-                .font(.zenMincho(size: 112, weight: .black))
+                .font(.zenMincho(size: 88, weight: .black))
                 .foregroundColor(.white.opacity(0.16))
-                .offset(x: 14, y: 18)
+                .offset(x: 10, y: 14)
             LinearGradient(
                 colors: [.clear, .black.opacity(0.28)],
                 startPoint: .center,
@@ -63,9 +63,9 @@ struct SavedLibraryCard: View {
 
     private var categoryIcon: some View {
         Image(systemName: library.category?.icon ?? "building.columns.fill")
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundColor(.white)
-            .frame(width: 30, height: 30)
+            .frame(width: 26, height: 26)
             .background(Color.white.opacity(0.22))
             .clipShape(Circle())
     }
@@ -75,12 +75,12 @@ struct SavedLibraryCard: View {
         ZStack {
             Circle()
                 .fill(Color.white)
-                .frame(width: 36, height: 36)
+                .frame(width: 32, height: 32)
             Circle()
                 .strokeBorder(Color.toshoRed, lineWidth: 1.5)
-                .frame(width: 30, height: 30)
+                .frame(width: 26, height: 26)
             Text("訪問\n済")
-                .font(.system(size: 9, weight: .heavy))
+                .font(.system(size: 8, weight: .heavy))
                 .foregroundColor(.toshoRed)
                 .multilineTextAlignment(.center)
                 .lineSpacing(0)
@@ -91,72 +91,15 @@ struct SavedLibraryCard: View {
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(library.name)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundColor(.white)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
             Text(library.city.isEmpty ? library.prefecture : library.city)
-                .font(.system(size: 10))
+                .font(.system(size: 9))
                 .foregroundColor(.white.opacity(0.85))
                 .lineLimit(1)
         }
-    }
-}
-
-/// 保存した図書館のうち、何館に行けたかを見せる達成バー。
-struct SavedLibrariesProgress: View {
-    let visitedCount: Int
-    let totalCount: Int
-
-    private var isComplete: Bool {
-        totalCount > 0 && visitedCount >= totalCount
-    }
-
-    private var ratio: Double {
-        totalCount == 0 ? 0 : min(1, Double(visitedCount) / Double(totalCount))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .lastTextBaseline) {
-                HStack(alignment: .lastTextBaseline, spacing: 2) {
-                    Text("\(visitedCount)")
-                        .font(.system(size: 22, weight: .black))
-                        .foregroundColor(.toshoRed)
-                    Text("/ \(totalCount)館 訪問")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.toshoSubtext)
-                }
-                Spacer()
-                if isComplete {
-                    Label("コンプリート！", systemImage: "star.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.toshoAmber)
-                } else {
-                    Text("あと\(totalCount - visitedCount)館で全部めぐれる")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.toshoSubtext)
-                }
-            }
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.toshoRed.opacity(0.10))
-                    Capsule()
-                        .fill(LinearGradient(
-                            colors: [.toshoAmber, .toshoRed],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ))
-                        .frame(width: proxy.size.width * ratio)
-                }
-            }
-            .frame(height: 8)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.toshoCard)
-        .clipShape(RoundedRectangle(cornerRadius: ToshoTheme.cornerRadius, style: .continuous))
-        .shadow(color: .black.opacity(ToshoTheme.shadowOpacity), radius: ToshoTheme.shadowRadius, y: 3)
     }
 }
 
@@ -174,7 +117,6 @@ struct SavedLibrariesProgress: View {
         category: .large
     )
     return VStack(alignment: .leading, spacing: 16) {
-        SavedLibrariesProgress(visitedCount: 2, totalCount: 5)
         HStack(spacing: 14) {
             SavedLibraryCard(library: sample, isVisited: true)
             SavedLibraryCard(library: sample, isVisited: false)

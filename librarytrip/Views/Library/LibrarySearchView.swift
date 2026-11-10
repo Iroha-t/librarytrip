@@ -554,7 +554,7 @@ struct LibrarySearchView: View {
             HStack {
                 Image(systemName: "book.closed.fill")
                     .foregroundColor(.toshoRed)
-                Text("本のタイトルで近くの図書館を探す")
+                Text("本から探す")
                     .font(.zenMincho(size: 17, weight: .semiBold))
                     .foregroundColor(.toshoText)
             }
